@@ -39,6 +39,8 @@ The `staff.role` column is authoritative. `is_staff()` returns true only for act
 
 `POST /functions/v1/manage-users` requires a Supabase Auth user JWT. Every request verifies the token against Supabase Auth and rechecks the caller's active `founder` row. The Edge Function accepts:
 
+In function settings, **Verify JWT with legacy secret** is off so JWTs using current Supabase signing keys reach the function. A missing or invalid user token still returns 401 from the function.
+
 - `{ "action": "list" }` → team accounts.
 - `{ "action": "invite", "email": "...", "name": "...", "role": "editor|viewer" }` → sends an invitation and creates a `staff` row.
 - `{ "action": "update", "user_id": "...", "role": "editor|viewer", "is_active": true|false }` → changes a non-Founder account.

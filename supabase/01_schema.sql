@@ -1,0 +1,149 @@
+-- =====================================================================
+-- SWEEO Stock : Supabase schema
+-- รันไฟล์นี้ใน Supabase > SQL Editor เป็นไฟล์แรก (รันซ้ำได้)
+-- =====================================================================
+
+-- ---------- ผู้มีสิทธิ์แก้ไข (staff) ----------
+create table if not exists public.staff (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  name        text not null default '',
+  is_admin    boolean not null default false,
+  is_active   boolean not null default true,
+  created_at  timestamptz not null default now()
+);
+
+-- true เมื่อผู้ใช้ที่ล็อกอินอยู่เป็น staff ที่ยังใช้งาน
+create or replace function public.is_staff()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (select 1 from public.staff s where s.user_id = auth.uid() and s.is_active);
+$$;
+
+-- ---------- สินค้า ----------
+create table if not exists public.items (
+  id          text primary key default ('n' || replace(gen_random_uuid()::text, '-', '')),
+  code        text not null default '',
+  model       text not null default '',
+  spec        text not null default '',
+  type        text not null default 'ไม่ระบุ',
+  dept        text not null default 'ไม่ระบุ',
+  loc         text not null default '',
+  remark      text not null default '',
+  opening     numeric not null default 0,          -- ยอดยกมา (ตรวจนับปี 2025)
+  avg_month   numeric,                              -- ขายเฉลี่ยต่อเดือน
+  rop         numeric,                              -- จุดสั่งผลิต
+  sort_order  integer not null default 0,
+  active      boolean not null default true,
+  source      text not null default 'app',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  updated_by  uuid default auth.uid()
+);
+
+-- ---------- รับเข้า / ส่งออก ----------
+create table if not exists public.movements (
+  id          uuid primary key default gen_random_uuid(),
+  item_id     text references public.items(id) on update cascade,
+  code        text not null default '',             -- เก็บรหัส/รุ่น ณ ตอนบันทึก
+  model       text not null default '',
+  date        date not null,
+  kind        text not null check (kind in ('in','out')),
+  qty         numeric not null check (qty > 0),
+  customer    text not null default '',
+  doc_no      text not null default '',
+  dept        text not null default '',
+  sale        text not null default '',
+  note        text not null default '',
+  source      text not null default 'app',
+  legacy_id   text unique,                          -- เลขแถวจาก Google Sheet เดิม
+  created_at  timestamptz not null default now(),
+  created_by  uuid default auth.uid(),
+  deleted_at  timestamptz,
+  deleted_by  uuid
+);
+create index if not exists movements_item_idx on public.movements(item_id) where deleted_at is null;
+create index if not exists movements_date_idx on public.movements(date);
+
+-- updated_at อัตโนมัติ
+create or replace function public.touch_updated()
+returns trigger language plpgsql as $$
+begin new.updated_at := now(); new.updated_by := auth.uid(); return new; end $$;
+drop trigger if exists items_touch on public.items;
+create trigger items_touch before update on public.items for each row execute function public.touch_updated();
+
+-- ---------- Row Level Security ----------
+alter table public.staff     enable row level security;
+alter table public.items     enable row level security;
+alter table public.movements enable row level security;
+
+-- staff: เห็นรายชื่อ staff ได้เฉพาะ staff (ใช้แสดงชื่อผู้บันทึก) ; เพิ่ม/แก้ staff ทำใน SQL Editor โดยผู้ดูแลเท่านั้น
+drop policy if exists staff_read on public.staff;
+create policy staff_read on public.staff for select to authenticated using (public.is_staff());
+
+-- items: staff อ่าน/เพิ่ม/แก้ได้ ; ไม่มีสิทธิ์ลบ (ใช้ active = false แทน)
+drop policy if exists items_read on public.items;
+drop policy if exists items_insert on public.items;
+drop policy if exists items_update on public.items;
+create policy items_read   on public.items for select to authenticated using (public.is_staff());
+create policy items_insert on public.items for insert to authenticated with check (public.is_staff());
+create policy items_update on public.items for update to authenticated using (public.is_staff()) with check (public.is_staff());
+
+-- movements: staff อ่าน/เพิ่มได้ ; แก้ได้เฉพาะการลบแบบ soft delete ; ไม่มีสิทธิ์ลบจริง
+drop policy if exists mv_read on public.movements;
+drop policy if exists mv_insert on public.movements;
+drop policy if exists mv_update on public.movements;
+create policy mv_read   on public.movements for select to authenticated using (public.is_staff());
+create policy mv_insert on public.movements for insert to authenticated with check (public.is_staff() and created_by = auth.uid());
+create policy mv_update on public.movements for update to authenticated using (public.is_staff()) with check (public.is_staff());
+
+-- กันการแก้ตัวเลขย้อนหลัง: อัปเดต movements ได้เฉพาะช่อง deleted_at / deleted_by
+create or replace function public.guard_movement_update()
+returns trigger language plpgsql as $$
+begin
+  if (new.item_id, new.date, new.kind, new.qty, new.customer, new.doc_no, new.dept, new.sale, new.note, new.created_by, new.created_at)
+     is distinct from
+     (old.item_id, old.date, old.kind, old.qty, old.customer, old.doc_no, old.dept, old.sale, old.note, old.created_by, old.created_at) then
+    raise exception 'แก้ไขรายการที่บันทึกแล้วไม่ได้ ให้ลบแล้วบันทึกใหม่';
+  end if;
+  if old.deleted_at is not null then
+    raise exception 'รายการนี้ถูกลบไปแล้ว';
+  end if;
+  if new.deleted_at is not null then new.deleted_by := auth.uid(); end if;
+  return new;
+end $$;
+drop trigger if exists movements_guard on public.movements;
+create trigger movements_guard before update on public.movements for each row execute function public.guard_movement_update();
+
+-- ---------- สำหรับ Visitor: ยอดคงเหลืออย่างเดียว ----------
+-- Visitor (ไม่ล็อกอิน) อ่านตาราง items/movements ตรงๆ ไม่ได้ ได้เฉพาะผลจากฟังก์ชันนี้
+create or replace function public.public_stock()
+returns table (id text, code text, model text, spec text, type text, dept text, balance numeric, sort_order integer)
+language sql stable security definer set search_path = public
+as $$
+  select i.id, i.code, i.model, i.spec, i.type, i.dept,
+         i.opening + coalesce(sum(case when m.kind = 'in' then m.qty else -m.qty end), 0) as balance,
+         i.sort_order
+  from public.items i
+  left join public.movements m on m.item_id = i.id and m.deleted_at is null
+  where i.active
+  group by i.id
+  order by i.sort_order;
+$$;
+
+revoke all on function public.public_stock() from public;
+grant execute on function public.public_stock() to anon, authenticated;
+revoke all on function public.is_staff() from public;
+grant execute on function public.is_staff() to anon, authenticated;
+
+-- สิทธิ์ระดับตาราง (RLS เป็นตัวกรองชั้นที่สอง)
+revoke all on public.staff, public.items, public.movements from anon;
+revoke delete, truncate on public.staff, public.items, public.movements from authenticated;
+grant select on public.staff to authenticated;
+grant select, insert, update on public.items, public.movements to authenticated;
+
+-- อัปเดตสด (Realtime) สำหรับหน้าจอ staff
+do $$ begin
+  begin alter publication supabase_realtime add table public.items; exception when others then null; end;
+  begin alter publication supabase_realtime add table public.movements; exception when others then null; end;
+end $$;

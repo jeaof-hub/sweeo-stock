@@ -117,14 +117,14 @@
 </div></dialog>
 
 <dialog id="dUsers" aria-labelledby="usersTitle"><div class="dlg">
-  <div class="dlg-head"><div><h2 id="usersTitle">จัดการผู้ใช้</h2><p>เฉพาะ Foundator เท่านั้นที่สร้างบัญชีและกำหนดสิทธิ์ได้</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
+  <div class="dlg-head"><div><h2 id="usersTitle">จัดการผู้ใช้</h2><p>ผู้ก่อตั้งและเจ้าของสร้างบัญชีและกำหนดสิทธิ์ได้ โดยแก้บัญชีผู้ก่อตั้งไม่ได้</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
   <div class="dlg-body">
     <form id="inviteForm">
       <h3>สร้างบัญชีสมาชิก</h3>
       <div class="grid">
         <div class="f"><label for="uName">ชื่อที่แสดง</label><input id="uName" maxlength="100" required autocomplete="off"></div>
         <div class="f"><label for="uEmail">อีเมล</label><input id="uEmail" type="email" required autocomplete="off"></div>
-        <div class="f full"><label for="uRole">สิทธิ์</label><select id="uRole"><option value="sales">ฝ่ายขาย</option><option value="warehouse">คลังสินค้า</option><option value="manager">ผู้จัดการ</option></select></div>
+        <div class="f full"><label for="uRole">สิทธิ์</label><select id="uRole"><option value="auditor">ผู้ตรวจสอบ</option><option value="warehouse">คลังสินค้า</option><option value="admin">แอดมิน</option><option value="owner">เจ้าของ</option></select></div>
         <div class="f"><label for="uPw1">รหัสผ่านเริ่มต้น (8–128 ตัวอักษร)</label><input id="uPw1" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
         <div class="f"><label for="uPw2">ยืนยันรหัสผ่าน</label><input id="uPw2" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
       </div>
@@ -212,6 +212,6 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="app.js?v=role-matrix-2"></script>
+<script src="app.js?v=owner-roles-1"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-// Founder-only user administration. The service-role key exists only in this Edge Function.
+// Founder/Owner user administration. The service-role key exists only in this Edge Function.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const projectUrl = Deno.env.get("SUPABASE_URL");
@@ -20,7 +20,7 @@ const reply = (body, status = 200) => new Response(JSON.stringify(body), {
   headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
 });
 const validEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
-const validRole = role => role === "sales" || role === "warehouse" || role === "manager";
+const validRole = role => ["auditor", "warehouse", "admin", "owner"].includes(role);
 const validUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const validPassword = value => typeof value === "string" && value.length >= 8 && value.length <= 128;
 
@@ -40,7 +40,7 @@ Deno.serve(async request => {
     console.error("staff lookup failed", actorError);
     return reply({ error: "ตรวจสิทธิ์ไม่สำเร็จ" }, 500);
   }
-  if (!actor?.is_active || actor.role !== "founder") return reply({ error: "เฉพาะ Founder จัดการผู้ใช้ได้" }, 403);
+  if (!actor?.is_active || !["founder", "owner"].includes(actor.role)) return reply({ error: "เฉพาะผู้ก่อตั้งหรือเจ้าของจัดการผู้ใช้ได้" }, 403);
 
   let input;
   try { input = await request.json(); } catch { return reply({ error: "ข้อมูลคำขอไม่ถูกต้อง" }, 400); }
@@ -97,7 +97,7 @@ Deno.serve(async request => {
       return reply({ error: "ตรวจบัญชีเป้าหมายไม่สำเร็จ" }, 500);
     }
     if (!target) return reply({ error: "ไม่พบบัญชีนี้" }, 404);
-    if (target.role === "founder") return reply({ error: "ไม่สามารถออกรหัสผ่านให้ Foundator ผ่านเว็บได้" }, 403);
+    if (target.role === "founder") return reply({ error: "ไม่สามารถตั้งรหัสผ่านให้ผู้ก่อตั้งผ่านเว็บได้" }, 403);
     const { error: updateError } = await admin.auth.admin.updateUserById(target.user_id, {
       password: input.password, email_confirm: true,
     });
@@ -117,7 +117,7 @@ Deno.serve(async request => {
       return reply({ error: "ตรวจบัญชีเป้าหมายไม่สำเร็จ" }, 500);
     }
     if (!target) return reply({ error: "ไม่พบบัญชีนี้" }, 404);
-    if (target.role === "founder") return reply({ error: "ไม่สามารถเปลี่ยนสิทธิ์ Founder ผ่านเว็บได้" }, 403);
+    if (target.role === "founder") return reply({ error: "ไม่สามารถจัดการบัญชีผู้ก่อตั้งผ่านเว็บได้" }, 403);
 
     const patch = {};
     if (Object.hasOwn(input, "role")) {

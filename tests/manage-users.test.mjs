@@ -9,6 +9,7 @@ function makeFunction() {
   const staff = [
     { user_id: "c8ca56f6-28a1-4854-be30-fb99e3e26887", email: "founder@example.com", name: "Founder", role: "founder", is_active: true, created_at: "2026-09-24" },
     { user_id: "11111111-1111-4111-8111-111111111111", email: "warehouse@example.com", name: "Warehouse", role: "warehouse", is_active: true, created_at: "2026-09-24" },
+    { user_id: "33333333-3333-4333-8333-333333333333", email: "owner@example.com", name: "Owner", role: "owner", is_active: true, created_at: "2026-09-24" },
   ];
   let creates = 0, passwordChanges = 0, createdAuthOptions, handler;
   const builder = () => {
@@ -27,7 +28,7 @@ function makeFunction() {
   };
   const admin = {
     auth: {
-      getUser: async token => token === "bad-token" ? { data: { user: null }, error: new Error("invalid") } : { data: { user: { id: token === "warehouse-token" ? staff[1].user_id : staff[0].user_id } }, error: null },
+      getUser: async token => token === "bad-token" ? { data: { user: null }, error: new Error("invalid") } : { data: { user: { id: token === "warehouse-token" ? staff[1].user_id : token === "owner-token" ? staff[2].user_id : staff[0].user_id } }, error: null },
       admin: {
         createUser: async options => { creates++; createdAuthOptions = options; return { data: { user: { id: "22222222-2222-4222-8222-222222222222" } }, error: null }; },
         updateUserById: async () => { passwordChanges++; return { data: {}, error: null }; },
@@ -57,7 +58,9 @@ test("requires a verified active Founder before any user operation", async () =>
 test("cannot create or modify Founder through the web API", async () => {
   const fn = makeFunction();
   assert.equal((await fn.call("founder-token", { action: "create", email: "next@example.com", name: "Next", role: "founder", password: "LongPassword1!" })).status, 400);
-  assert.equal((await fn.call("founder-token", { action: "update", user_id: fn.staff[0].user_id, role: "sales" })).status, 403);
+  assert.equal((await fn.call("founder-token", { action: "update", user_id: fn.staff[0].user_id, role: "auditor" })).status, 403);
+  assert.equal((await fn.call("owner-token", { action: "update", user_id: fn.staff[0].user_id, role: "auditor" })).status, 403);
+  assert.equal((await fn.call("owner-token", { action: "set_password", user_id: fn.staff[0].user_id, password: "AnotherPassword1!" })).status, 403);
   assert.equal((await fn.call("founder-token", { action: "set_password", user_id: fn.staff[0].user_id, password: "AnotherPassword1!" })).status, 403);
   assert.equal(fn.staff[0].role, "founder");
   assert.equal(fn.creates, 0);
@@ -74,21 +77,32 @@ test("Founder creates a Warehouse member without email and can set a member pass
   assert.equal(created.body.password, undefined);
   assert.equal((await fn.call("founder-token", { action: "create", email: "short@example.com", name: "Short", role: "warehouse", password: "short" })).status, 400);
   assert.equal((await fn.call("founder-token", { action: "create", email: "legacy@example.com", name: "Legacy", role: "editor", password: "LongPassword1!" })).status, 400);
-  assert.equal(fn.staff[2].role, "warehouse");
+  assert.equal(fn.staff[3].role, "warehouse");
   const pw = await fn.call("founder-token", { action: "set_password", user_id: fn.staff[1].user_id, password: "AnotherPassword1!" });
   assert.equal(pw.status, 200);
   assert.equal(fn.passwordChanges, 1);
   assert.equal(pw.body.password, undefined);
-  const update = await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "sales", is_active: false });
+  const update = await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "auditor", is_active: false });
   assert.equal(update.status, 200);
-  assert.equal(fn.staff[1].role, "sales");
+  assert.equal(fn.staff[1].role, "auditor");
   assert.equal(fn.staff[1].is_active, false);
 });
 
-test("Founder may grant Manager access but cannot grant Founder access", async () => {
+test("Founder may grant Admin and Owner access but cannot grant Founder access", async () => {
   const fn = makeFunction();
-  const update = await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "manager" });
+  const update = await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "admin" });
   assert.equal(update.status, 200);
-  assert.equal(fn.staff[1].role, "manager");
+  assert.equal(fn.staff[1].role, "admin");
+  assert.equal((await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "owner" })).status, 200);
+  assert.equal(fn.staff[1].role, "owner");
   assert.equal((await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "founder" })).status, 400);
+});
+
+test("Owner manages non-Founder accounts and cannot create Founder", async () => {
+  const fn = makeFunction();
+  assert.equal((await fn.call("owner-token", { action: "list" })).status, 200);
+  assert.equal((await fn.call("owner-token", { action: "create", email: "auditor@example.com", name: "Auditor", role: "auditor", password: "LongPassword1!" })).status, 201);
+  assert.equal((await fn.call("owner-token", { action: "update", user_id: fn.staff[1].user_id, role: "admin" })).status, 200);
+  assert.equal((await fn.call("owner-token", { action: "set_password", user_id: fn.staff[1].user_id, password: "AnotherPassword1!" })).status, 200);
+  assert.equal((await fn.call("owner-token", { action: "create", email: "another@example.com", name: "Another", role: "founder", password: "LongPassword1!" })).status, 400);
 });

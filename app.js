@@ -1,8 +1,8 @@
 /* SWEEO Stock — GitHub Pages + Supabase
  * Visitor (ไม่ล็อกอิน): เห็นเฉพาะยอดคงเหลือผ่านฟังก์ชัน public_stock()
- * Sales: อ่านรายละเอียดสต็อกและประวัติ
+ * Auditor: อ่านรายละเอียดสต็อกและประวัติ
  * Warehouse: บันทึกรับเข้า/ส่งออก และลบรายการของตนเองในวันเดียวกัน
- * Manager / Founder: จัดการสินค้า ปรับยอด ส่งออกข้อมูล และดูรายการที่ถูกลบ
+ * Admin / Owner / Founder: จัดการสินค้า ปรับยอด ส่งออกข้อมูล และดูรายการที่ถูกลบ
  */
 (function () {
   "use strict";
@@ -21,18 +21,19 @@
   let sb = null;
   let mode = "visitor";            // "visitor" | "member"
   let session = null;
-  let currentRole = null;          // "founder" | "manager" | "warehouse" | "sales" | null
+  let currentRole = null;          // "founder" | "owner" | "admin" | "warehouse" | "auditor" | null
   let items = new Map();           // id -> item
   let entries = [];                // movements (not deleted)
-  let deletedEntries = [];         // manager / founder audit view
-  let stockChanges = [];           // founder-only change log
+  let deletedEntries = [];         // admin / owner / founder deleted entries
+  let stockChanges = [];           // founder / owner change log
   let moreStockChanges = false;
   let calc = new Map();            // id -> {inQ,out,bal,status}
   let staffNames = {};
   let statusFilter = "";
   let channel = null, reloadTimer = null, loading = false;
-  const canRecord = () => ["founder", "manager", "warehouse"].includes(currentRole);
-  const canManageStock = () => ["founder", "manager"].includes(currentRole);
+  const canManageUsers = () => ["founder", "owner"].includes(currentRole);
+  const canRecord = () => ["founder", "owner", "admin", "warehouse"].includes(currentRole);
+  const canManageStock = () => ["founder", "owner", "admin"].includes(currentRole);
   const bangkokDate = value => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
   const canDeleteEntry = e => !!e && (canManageStock() || (currentRole === "warehouse" && e.created_by === session?.user.id && bangkokDate(e.created_at) === bangkokDate(Date.now())));
   const recorderLabel = (uid, source) => staffNames[uid] || (source === "sheet" ? "Google Sheet" : uid === session?.user.id ? "คุณ" : "พนักงาน");
@@ -121,8 +122,8 @@
       fetchAll(() => sb.from("items").select("*").eq("active", true).order("id")),
       fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
       canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false })) : Promise.resolve([]),
-      currentRole === "founder" ? sb.rpc("staff_display_names") : Promise.resolve({ data: [] }),
-      currentRole === "founder" ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201) : Promise.resolve({ data: [] })
+      canManageUsers() ? sb.rpc("staff_display_names") : Promise.resolve({ data: [] }),
+      canManageUsers() ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201) : Promise.resolve({ data: [] })
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
@@ -159,19 +160,21 @@
     currentRole = null;
     if (s) { const { data, error } = await sb.rpc("my_role"); if (!error) currentRole = data; }
     if (currentRole === "editor") currentRole = "warehouse";
-    if (currentRole === "viewer") currentRole = "sales";
-    mode = ["founder", "manager", "warehouse", "sales"].includes(currentRole) ? "member" : "visitor";
+    if (currentRole === "viewer") currentRole = "auditor";
+    if (currentRole === "sales") currentRole = "auditor";
+    if (currentRole === "manager") currentRole = "admin";
+    mode = ["founder", "owner", "admin", "warehouse", "auditor"].includes(currentRole) ? "member" : "visitor";
     const isMember = mode === "member";
     $("loginBtn").hidden = !!s; $("userMenu").hidden = !s;
     $("meEmail").textContent = s ? s.user.email : "";
-    $("roleBadge").textContent = { founder: "ผู้ก่อตั้ง", manager: "ผู้จัดการ", warehouse: "คลังสินค้า", sales: "ฝ่ายขาย" }[currentRole] || "ผู้เยี่ยมชม";
+    $("roleBadge").textContent = { founder: "ผู้ก่อตั้ง", owner: "เจ้าของ", admin: "แอดมิน", warehouse: "คลังสินค้า", auditor: "ผู้ตรวจสอบ" }[currentRole] || "ผู้เยี่ยมชม";
     $("roleBadge").classList.toggle("staff", isMember);
-    $("roleBadge").classList.toggle("founder", currentRole === "founder");
+    $("roleBadge").classList.toggle("founder", canManageUsers());
     $("tabs").hidden = !isMember; $("actions").hidden = !canRecord(); $("newItemBtn").hidden = !canManageStock();
     $("tabAudit").hidden = !canManageStock();
-    $("tabChanges").hidden = currentRole !== "founder";
+    $("tabChanges").hidden = !canManageUsers();
     $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
-    $("manageUsersBtn").hidden = currentRole !== "founder";
+    $("manageUsersBtn").hidden = !canManageUsers();
     document.querySelectorAll("[data-member]").forEach(o => { o.hidden = !isMember; o.disabled = !isMember; });
     if (!isMember && ["avgDesc", "cover"].includes($("fSort").value)) $("fSort").value = "order";
     const b = $("banner");
@@ -184,7 +187,7 @@
       $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = "";
       openDlg($("dPw"));
     }
-    if (!isMember || !canManageStock() && !$("viewAudit").hidden || currentRole !== "founder" && !$("viewChanges").hidden) setTab("stock");
+    if (!isMember || !canManageStock() && !$("viewAudit").hidden || !canManageUsers() && !$("viewChanges").hidden) setTab("stock");
     items = new Map(); entries = []; deletedEntries = []; stockChanges = []; moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
@@ -213,7 +216,7 @@
     $("dPw").close(); toast("เปลี่ยนรหัสผ่านแล้ว");
   });
 
-  /* ---------- Founder: user access ---------- */
+  /* ---------- Founder / Owner: user access ---------- */
   let managedUsers = [];
   async function userAdmin(action, fields = {}) {
     const { data, error } = await sb.auth.getSession();
@@ -240,9 +243,10 @@
         <div class="user-meta"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div>
         ${founder ? '<span class="badge founder">ผู้ก่อตั้ง</span>' : `<div class="user-controls">
           <label>สิทธิ์ <select class="user-role" aria-label="สิทธิ์ของ ${esc(u.email)}">
-            <option value="sales"${["sales", "viewer"].includes(u.role) ? " selected" : ""}>ฝ่ายขาย</option>
+            <option value="auditor"${["auditor", "sales", "viewer"].includes(u.role) ? " selected" : ""}>ผู้ตรวจสอบ</option>
             <option value="warehouse"${["warehouse", "editor"].includes(u.role) ? " selected" : ""}>คลังสินค้า</option>
-            <option value="manager"${u.role === "manager" ? " selected" : ""}>ผู้จัดการ</option>
+            <option value="admin"${["admin", "manager"].includes(u.role) ? " selected" : ""}>แอดมิน</option>
+            <option value="owner"${u.role === "owner" ? " selected" : ""}>เจ้าของ</option>
           </select></label>
           <label>สถานะ <select class="user-active" aria-label="สถานะของ ${esc(u.email)}">
             <option value="true"${u.is_active ? " selected" : ""}>ใช้งาน</option>
@@ -260,7 +264,7 @@
     renderUsers();
   }
   $("manageUsersBtn").onclick = async () => {
-    if (currentRole !== "founder") return;
+    if (!canManageUsers()) return;
     $("menuPop").hidden = true;
     $("uMsg").textContent = "";
     $("userList").textContent = "กำลังโหลดรายชื่อ";
@@ -269,7 +273,7 @@
   };
   $("inviteForm").addEventListener("submit", async event => {
     event.preventDefault();
-    if (currentRole !== "founder") return;
+    if (!canManageUsers()) return;
     $("uMsg").textContent = "";
     if ($("uPw1").value !== $("uPw2").value) { $("uMsg").textContent = "รหัสผ่านสองช่องไม่ตรงกัน"; return; }
     $("uInvite").disabled = true;
@@ -283,7 +287,7 @@
   });
   $("userList").addEventListener("click", async event => {
     const passwordButton = event.target.closest("[data-set-pw]");
-    if (passwordButton && currentRole === "founder") {
+    if (passwordButton && canManageUsers()) {
       const row = passwordButton.closest(".user-card");
       const user = managedUsers.find(u => u.user_id === row.dataset.uid);
       if (!user || user.role === "founder") return;
@@ -294,7 +298,7 @@
       return;
     }
     const button = event.target.closest("[data-save-user]");
-    if (!button || currentRole !== "founder") return;
+    if (!button || !canManageUsers()) return;
     const row = button.closest(".user-card");
     const user = managedUsers.find(u => u.user_id === row.dataset.uid);
     if (!user || user.role === "founder") return;
@@ -311,7 +315,7 @@
   });
   $("userPwForm").addEventListener("submit", async event => {
     event.preventDefault();
-    if (currentRole !== "founder") return;
+    if (!canManageUsers()) return;
     $("upMsg").textContent = "";
     if ($("up1").value !== $("up2").value) { $("upMsg").textContent = "รหัสผ่านสองช่องไม่ตรงกัน"; return; }
     $("upSave").disabled = true;
@@ -421,20 +425,20 @@
     if (which === "changes") renderChangeLog();
   }
   $("tabStock").onclick = () => setTab("stock"); $("tabLog").onclick = () => setTab("log"); $("tabAudit").onclick = () => { if (canManageStock()) setTab("audit"); };
-  $("tabChanges").onclick = () => { if (currentRole === "founder") setTab("changes"); };
+  $("tabChanges").onclick = () => { if (canManageUsers()) setTab("changes"); };
 
   function renderAudit() {
     if (!canManageStock()) return;
     $("auditCount").textContent = `${fmt(deletedEntries.length)} รายการที่ถูกลบ`;
     $("auditList").innerHTML = deletedEntries.length ? `<div class="log">${deletedEntries.map(e => {
       const item = items.get(e.item_id);
-      const who = currentRole === "founder" ? recorderLabel(e.deleted_by, e.source) : e.deleted_by === session?.user.id ? "คุณ" : "พนักงาน";
+      const who = canManageUsers() ? recorderLabel(e.deleted_by, e.source) : e.deleted_by === session?.user.id ? "คุณ" : "พนักงาน";
       return `<div class="row"><div class="m">${esc(item ? itemName(item) : (e.model || e.code || "รายการ"))}</div><div class="q ${e.kind}">${e.kind === "in" ? "+" : "−"}${fmt(e.qty)}<small>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</small></div><div class="s">${esc(thDate(e.date))}  |  ${esc(e.customer || "–")}  |  ${esc(e.doc_no || "–")}<br>ลบเมื่อ ${esc(new Date(e.deleted_at).toLocaleString("th-TH"))} โดย ${esc(who)}</div></div>`;
     }).join("")}</div>` : '<div class="state"><h2>ยังไม่มีรายการที่ถูกลบ</h2></div>';
   }
 
   function renderChangeLog() {
-    if (currentRole !== "founder") return;
+    if (!canManageUsers()) return;
     $("changesCount").textContent = `แสดง ${fmt(stockChanges.length)} การเปลี่ยนแปลง${moreStockChanges ? "ล่าสุด" : "ทั้งหมด"} (เริ่มเก็บตั้งแต่เปิดใช้ระบบบันทึก)`;
     const labels = { insert: "เพิ่ม", update: "แก้ไข", delete: "ลบ", soft_delete: "ลบรายการ" };
     $("changesList").innerHTML = stockChanges.length ? `<div class="log">${stockChanges.map(c => {
@@ -447,7 +451,7 @@
   }
   $("changesList").addEventListener("click", async event => {
     const button = event.target.closest("#loadMoreChanges");
-    if (!button || currentRole !== "founder" || !moreStockChanges || !stockChanges.length) return;
+    if (!button || !canManageUsers() || !moreStockChanges || !stockChanges.length) return;
     button.disabled = true;
     const { data, error } = await sb.from("stock_audit")
       .select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data")

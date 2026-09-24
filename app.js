@@ -45,7 +45,18 @@
   }
   const openDlg = d => { if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute("open", ""); };
   document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
-  document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if (e.target === d) d.close(); }));
+  document.querySelectorAll("dialog").forEach(d => {
+    let backdropPointer = null;
+    d.addEventListener("pointerdown", e => {
+      backdropPointer = e.target === d ? e.pointerId : null;
+    });
+    d.addEventListener("pointerup", e => {
+      if (backdropPointer === e.pointerId && e.target === d) d.close();
+      backdropPointer = null;
+    });
+    d.addEventListener("pointercancel", () => { backdropPointer = null; });
+    d.addEventListener("close", () => { backdropPointer = null; });
+  });
   function fillSelect(sel, values, first) {
     const cur = sel.value; sel.innerHTML = "";
     const o0 = document.createElement("option"); o0.value = ""; o0.textContent = first; sel.appendChild(o0);

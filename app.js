@@ -27,8 +27,16 @@
   let statusFilter = "";
   let channel = null, reloadTimer = null, loading = false;
   // Supabase may remove the invite URL fragment while restoring the session.
-  const authUrlType = new URLSearchParams(location.hash.replace(/^#/, "")).get("type");
+  const authParams = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const authUrlType = authParams.get("type");
   let invitePending = authUrlType === "invite" || authUrlType === "recovery";
+  if (authParams.has("error")) {
+    $("authNotice").textContent = authParams.get("error_code") === "otp_expired"
+      ? "ลิงก์เชิญหมดอายุแล้ว กรุณาขอ Foundator ส่งคำเชิญใหม่ แล้วเปิดลิงก์ใหม่ทันที"
+      : "ลิงก์ยืนยันบัญชีใช้ไม่ได้ กรุณาขอ Foundator ส่งคำเชิญใหม่";
+    $("authNotice").hidden = false;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
+  }
 
   /* ---------- helpers ---------- */
   function toast(msg) {
@@ -138,11 +146,6 @@
     const b = $("banner");
     if (s && !isStaff) { b.hidden = false; b.textContent = currentRole === "viewer" ? "บัญชีนี้มีสิทธิ์ดูยอดคงเหลือเท่านั้น" : "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อ Foundator"; }
     else b.hidden = true;
-    if (!isStaff) setTab("stock");
-    items = new Map(); entries = []; statusFilter = "";
-    $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
-    await reload();
-    if (isStaff) subscribe(); else unsubscribe();
     if (invitePending && s) {
       invitePending = false;
       try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
@@ -150,6 +153,11 @@
       $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = "";
       openDlg($("dPw"));
     }
+    if (!isStaff) setTab("stock");
+    items = new Map(); entries = []; statusFilter = "";
+    $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
+    await reload();
+    if (isStaff) subscribe(); else unsubscribe();
   }
 
   $("loginBtn").onclick = () => { $("lgMsg").textContent = ""; openDlg($("dLogin")); setTimeout(() => $("lgEmail").focus(), 50); };

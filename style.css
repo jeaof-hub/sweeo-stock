@@ -170,6 +170,7 @@ td.w{white-space:normal;min-width:150px}
 .badge.staff{background:var(--green-soft);color:var(--green);border-color:transparent}
 .badge.founder{background:var(--amber-soft);color:var(--amber);border-color:transparent;font-weight:700}
 .banner{margin:12px 0 0;padding:10px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:.88rem;color:var(--muted)}
+.banner.auth-error{border-color:var(--red);color:var(--red)}
 .menu{position:relative}
 .menu .pop{position:absolute;right:0;top:44px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;z-index:8;overflow:hidden}
 .menu .pop button{display:block;width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;border-bottom:1px solid var(--line)}

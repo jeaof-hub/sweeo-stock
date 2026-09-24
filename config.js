@@ -2,6 +2,6 @@
 // ค่า anon key เปิดเผยได้ตามการออกแบบของ Supabase เพราะสิทธิ์ถูกควบคุมด้วย Row Level Security
 // ห้ามใส่ service_role key ในไฟล์นี้เด็ดขาด
 window.SWEEO_CONFIG = {
-  SUPABASE_URL: "https://YOUR-PROJECT-REF.supabase.co",
-  SUPABASE_ANON_KEY: "YOUR-ANON-KEY"
+  SUPABASE_URL: "https://lqertitwtrjomoevqfoy.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_1V9HCebltknEZrGYBw4nLQ_Soy0H_bL"
 };

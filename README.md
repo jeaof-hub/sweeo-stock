@@ -14,17 +14,16 @@
 | ไฟล์ | หน้าที่ |
 |---|---|
 | `index.html`, `style.css`, `app.js` | หน้าเว็บ |
-| `config.js` | ที่อยู่และ anon key ของ Supabase (ต้องแก้ก่อนใช้งาน) |
+| `config.js` | ที่อยู่และ publishable key ของโปรเจกต์ Supabase |
 | `supabase/01_schema.sql` | สร้างตาราง สิทธิ์ และฟังก์ชัน |
 
 ไฟล์ข้อมูลตั้งต้น (`02_seed_items.sql`, `03_seed_movements.sql`) อยู่นอกโฟลเดอร์นี้โดยตั้งใจ
 **ห้ามอัปโหลดขึ้น GitHub** เพราะมีชื่อลูกค้าและประวัติการส่งของ ใช้รันใน Supabase เท่านั้น
 
-> **สถานะการย้ายข้อมูล (24 ก.ย. 2026):** ยังไม่ควรรันไฟล์ข้อมูลตั้งต้นจาก ZIP ในฐานข้อมูลจริง
-> เมื่อตรวจเทียบกับ Google Sheet ล่าสุด ยอดคงเหลือของสินค้า 471 รายการตรงกัน
-> แต่วันที่ใน `03_seed_movements.sql` ไม่ตรงกับวันที่ที่ระบุใน Sheet หลายรายการ
-> และ Sheet ไม่มีวันที่ทั้งสองช่องในประวัติ 370 แถว ชุดข้อมูลที่ตรวจแล้วจะเก็บวันที่เหล่านี้เป็นค่าว่าง
-> ประวัติอีก 2 แถวไม่มีสินค้าที่ตรงกันในตารางสินค้า จึงแสดงในประวัติแต่ไม่นับในยอดคงเหลือ
+> **สถานะการย้ายข้อมูล (24 ก.ย. 2026):** นำเข้าข้อมูลที่ตรวจเทียบกับ Google Sheet ล่าสุดแล้ว
+> มีสินค้า 471 รายการ ประวัติ 652 รายการ ยอดคงเหลือรวม 203,525 ชิ้น ตรงกับชีต
+> ประวัติ 370 แถวไม่มีวันที่ทั้งสองช่องและเก็บเป็นค่าว่างตามต้นฉบับ
+> ประวัติอีก 2 แถวไม่มีสินค้าที่ตรงกัน จึงไม่นับในยอดคงเหลือ
 
 ---
 
@@ -41,11 +40,13 @@
 ```bash
 python tools/prepare_migration.py --xlsx latest-stock.xlsx --zip sweeo-stock-github.zip
 ```
-สคริปต์จะหยุดหากรายการหรือยอดไม่ตรงกับไฟล์ ZIP และจะเก็บ SQL ที่สร้างใน `migration/private/` ซึ่ง Git ไม่ติดตาม
-หลังตรวจยอดกับ Google Sheet ล่าสุดเรียบร้อย จึงรันไฟล์ตามลำดับ
+สคริปต์จะหยุดหากรายการหรือยอดไม่ตรงกับไฟล์ ZIP และจะเก็บ SQL/CSV ที่สร้างใน `migration/private/` ซึ่ง Git ไม่ติดตาม
+สำหรับฐานข้อมูลใหม่ นำเข้าตามลำดับนี้ (เลือก SQL Editor หรือ Table Editor → Import CSV อย่างใดอย่างหนึ่งสำหรับข้อมูลแต่ละตาราง)
 1. `01_schema.sql`
-2. `migration/private/02_seed_items.sql`
-3. `migration/private/03_seed_movements.sql`
+2. `migration/private/02_seed_items.sql` หรือ `02_seed_items.csv` → ตาราง `items`
+3. `migration/private/03_seed_movements.sql` หรือ `03_seed_movements.csv` → ตาราง `movements`
+
+เมื่อใช้ CSV ให้ตั้ง **Set empty cells as NULL** เฉพาะ `avg_month`, `rop` สำหรับสินค้า และเฉพาะ `item_id`, `date` สำหรับประวัติ เพื่อรักษาข้อความว่างเดิมไว้ในช่องอื่น
 
 ตรวจผลด้วยคำสั่งนี้ ต้องได้ `471` และ `652`
 ```sql
@@ -57,12 +58,12 @@ select (select count(*) from items) as items, (select count(*) from movements) a
 ให้ผู้ดูแลเป็นคนสร้างบัญชีเท่านั้น ส่วน Email provider ต้องเปิดอยู่
 
 ### 4. สร้างบัญชีผู้แก้ไข
-1. เมนู **Authentication → Users → Add user → Create new user**
-2. ใส่อีเมลและรหัสผ่านชั่วคราว ติ๊ก **Auto Confirm User** แล้วกดสร้าง
+1. ตั้งค่า **Authentication → URL Configuration → Site URL** ให้เป็น URL เว็บจริง
+2. เมนู **Authentication → Users → Add user → Send invitation** ใส่อีเมลพนักงาน ให้เจ้าของอีเมลตั้งรหัสผ่านเองหลังเปิดลิงก์เชิญ
 3. ไปที่ **SQL Editor** ให้สิทธิ์แก้ไขกับบัญชีนั้น (แก้อีเมลและชื่อ)
 ```sql
-insert into staff (user_id, name)
-select id, 'Aof' from auth.users where email = 'aof@example.com';
+insert into staff (user_id, name, is_admin)
+select id, 'name@example.com', false from auth.users where email = 'name@example.com';
 ```
 4. ทำซ้ำสำหรับพนักงานทุกคนที่ต้องบันทึกข้อมูล แจ้งให้เปลี่ยนรหัสผ่านที่เมนู "บัญชี" หลังเข้าใช้ครั้งแรก
 
@@ -73,17 +74,16 @@ where user_id = (select id from auth.users where email = 'someone@example.com');
 ```
 บัญชีที่ล็อกอินได้แต่ไม่อยู่ในตาราง `staff` จะเห็นเหมือนผู้เยี่ยมชม
 
-### 5. ใส่ค่าเชื่อมต่อใน `config.js`
-1. เมนู **Project Settings → API** (หรือ Data API / API Keys)
-2. คัดลอก **Project URL** และ **anon public key**
-3. แก้ไฟล์ `config.js`
+### 5. ค่าเชื่อมต่อใน `config.js`
+ไฟล์นี้ตั้งค่า URL โปรเจกต์และ **publishable key** แล้ว คีย์ชนิดนี้เปิดเผยในเบราว์เซอร์ได้เพราะ RLS บังคับสิทธิ์ที่ฐานข้อมูล
+หากย้ายโปรเจกต์ ให้คัดลอก Project URL และ publishable key จาก Project Settings → API Keys แล้วแก้ไฟล์
 ```js
 window.SWEEO_CONFIG = {
   SUPABASE_URL: "https://xxxxxxxx.supabase.co",
-  SUPABASE_ANON_KEY: "eyJhbGciOi..."
+  SUPABASE_ANON_KEY: "sb_publishable_..."
 };
 ```
-anon key เปิดเผยได้ตามการออกแบบของ Supabase **ห้ามใช้ service_role key เด็ดขาด**
+**ห้ามใช้ secret หรือ service_role key ในไฟล์นี้เด็ดขาด**
 
 ### 6. อัปโหลดขึ้น GitHub
 1. ที่ https://github.com กด **New repository** ตั้งชื่อ เช่น `sweeo-stock`

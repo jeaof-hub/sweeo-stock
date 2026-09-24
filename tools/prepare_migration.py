@@ -5,6 +5,7 @@ private directory; never commit the generated SQL or the source workbook.
 """
 
 import argparse
+import csv
 import json
 import re
 import zipfile
@@ -109,6 +110,14 @@ def sheet_rows(sheet, width):
     }
 
 
+def write_csv(path, columns, rows):
+    with path.open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(columns)
+        for row in rows:
+            writer.writerow(["" if value is None else str(value) for value in row])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xlsx", type=Path, required=True)
@@ -199,6 +208,11 @@ def main():
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "02_seed_items.sql").write_text(item_text, encoding="utf-8")
+    write_csv(
+        args.out / "02_seed_items.csv",
+        ["id", "code", "model", "spec", "type", "dept", "loc", "remark", "opening", "avg_month", "rop", "sort_order", "source"],
+        items,
+    )
     heading = (
         "-- SWEEO Stock: checked against the latest Google Sheet export.\n"
         "-- Blank dates in the source remain SQL NULL. Never commit this file.\n"
@@ -209,6 +223,11 @@ def main():
     rows_sql = ",\n".join("(" + ",".join(sql_value(v) for v in row) + ")" for row in revised)
     (args.out / "03_seed_movements.sql").write_text(
         heading + rows_sql + "\non conflict (legacy_id) do nothing;\ncommit;\n", encoding="utf-8"
+    )
+    write_csv(
+        args.out / "03_seed_movements.csv",
+        ["item_id", "code", "model", "date", "kind", "qty", "customer", "doc_no", "dept", "sale", "source", "legacy_id"],
+        [row[:-1] for row in revised],
     )
     summary = {
         "item_count": len(items),

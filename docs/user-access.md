@@ -3,10 +3,10 @@
 ## Requirements and assumptions
 
 - The existing `is_admin=true` account is the sole **Foundator** (stored as `founder`).
-- Only Foundator can invite users or change a user's role and active status from the web app.
+- Only Foundator can create users, set their passwords, or change their role and active status from the web app.
 - Team roles are **Editor** (read and change stock, see history) and **Viewer** (see only the same stock balances as visitors).
 - Foundator cannot be changed or disabled through the web app. A project owner can recover access in the Supabase dashboard if needed.
-- Self-signup stays disabled. Invitations go to the email address entered by Foundator; recipients set their own passwords.
+- Self-signup stays disabled. Foundator enters each member's email and initial password in the web app and conveys the password to the member separately.
 
 ## Components and data flow
 
@@ -15,9 +15,9 @@ GitHub Pages app ── publishable key + user JWT ──► Supabase Auth
        │                                  │
        ├── stock reads/writes ───────────► PostgREST + RLS ──► items, movements
        │
-       └── list/invite/update users ─────► manage-users Edge Function
+       └── list/create/update users ─────► manage-users Edge Function
                                             │  verify JWT and active founder row
-                                            ├── Auth admin invite API
+                                            ├── Auth admin create/update API
                                             └── staff table (service role)
 ```
 
@@ -31,7 +31,7 @@ The `service_role` database role needs explicit `SELECT`, `INSERT`, and `UPDATE`
 | View product list and balances | ✓ | ✓ | ✓ | ✓ |
 | View movement history and private stock fields | | | ✓ | ✓ |
 | Record movements and edit products | | | ✓ | ✓ |
-| Invite users or change their rights | | | | ✓ |
+| Create users, set passwords or change rights | | | | ✓ |
 | Change Foundator rights through the web | | | | |
 
 The `staff.role` column is authoritative. `is_staff()` returns true only for active `founder` or `editor` rows, so existing stock RLS policies enforce the matrix. `my_role()` returns only the caller's active role for the UI. Direct writes to `staff` are not granted to browser users.
@@ -43,11 +43,12 @@ The `staff.role` column is authoritative. `is_staff()` returns true only for act
 In function settings, **Verify JWT with legacy secret** is off so JWTs using current Supabase signing keys reach the function. A missing or invalid user token still returns 401 from the function.
 
 - `{ "action": "list" }` → team accounts.
-- `{ "action": "invite", "email": "...", "name": "...", "role": "editor|viewer" }` → sends an invitation and creates a `staff` row.
+- `{ "action": "create", "email": "...", "name": "...", "role": "editor|viewer", "password": "..." }` → creates a confirmed Auth user and a `staff` row without email.
+- `{ "action": "set_password", "user_id": "...", "password": "..." }` → sets a password for a non-Founder team member, including a pending invitation account, without email.
 - `{ "action": "update", "user_id": "...", "role": "editor|viewer", "is_active": true|false }` → changes a non-Founder account.
 
 The function rejects requests to create a second Founder or modify the existing Founder. Deactivation preserves the Auth user and stock audit references; RLS denies future editor access immediately.
 
 ## Reliability and tradeoffs
 
-Auth invitation and the `staff` insert are separate operations. If the invite request succeeds but the insert fails, the function returns an error for database repair; the recipient cannot access private stock without a `staff` row. Supabase's default email service has delivery restrictions and no delivery guarantee, so configure custom SMTP for regular team use. An Auth `mail.send` event records an attempted send, not recipient delivery. Expired invite links require a fresh invitation for the same Auth user; the app shows an explicit expiry message. If the team later needs separate permissions for receiving, dispatching, reporting, or multiple Founders, revisit the three-role model and add explicit permission records and an access-change audit log.
+Auth user creation and the `staff` insert are separate operations. If Auth creation succeeds but the insert fails, the function returns an error for database repair; the account cannot access private stock without a `staff` row. Passwords are sent over HTTPS to Supabase Auth, are stored there as hashes, and are never returned by the Edge Function or written to the repository. Foundator should deliver initial passwords privately and tell members to change them after first login. If the team later needs separate permissions for receiving, dispatching, reporting, or multiple Founders, revisit the three-role model and add explicit permission records and an access-change audit log.

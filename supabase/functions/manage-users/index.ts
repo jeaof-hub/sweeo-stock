@@ -17,11 +17,12 @@ const cors = {
 };
 const reply = (body, status = 200) => new Response(JSON.stringify(body), {
   status,
-  headers: { ...cors, "Content-Type": "application/json; charset=utf-8" },
+  headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
 });
 const validEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
 const validRole = role => role === "editor" || role === "viewer";
 const validUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+const validPassword = value => typeof value === "string" && value.length >= 8 && value.length <= 128;
 
 Deno.serve(async request => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -55,11 +56,11 @@ Deno.serve(async request => {
     return reply({ users: data });
   }
 
-  if (input.action === "invite") {
+  if (input.action === "create") {
     const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
     const name = typeof input.name === "string" ? input.name.trim() : "";
-    if (!validEmail(email) || !name || name.length > 100 || !validRole(input.role)) {
-      return reply({ error: "ตรวจอีเมล ชื่อ และสิทธิ์ที่เลือก" }, 400);
+    if (!validEmail(email) || !name || name.length > 100 || !validRole(input.role) || !validPassword(input.password)) {
+      return reply({ error: "ตรวจอีเมล ชื่อ สิทธิ์ และรหัสผ่าน (8–128 ตัวอักษร)" }, 400);
     }
     const { data: existing, error: lookupError } = await admin.from("staff")
       .select("user_id").eq("email", email).maybeSingle();
@@ -69,20 +70,42 @@ Deno.serve(async request => {
     }
     if (existing) return reply({ error: "อีเมลนี้มีบัญชีในทีมแล้ว" }, 409);
 
-    // The project's configured Site URL is the invitation destination.
-    const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
-    if (inviteError || !invited?.user?.id) {
-      console.error("invite failed", inviteError);
-      return reply({ error: "ส่งคำเชิญไม่สำเร็จ อาจมีบัญชีนี้อยู่แล้วหรือติดขีดจำกัดอีเมล" }, 400);
+    const { data: createdAuth, error: createError } = await admin.auth.admin.createUser({
+      email, password: input.password, email_confirm: true, user_metadata: { name },
+    });
+    if (createError || !createdAuth?.user?.id) {
+      console.error("create auth user failed", createError);
+      return reply({ error: "สร้างบัญชีไม่สำเร็จ อาจมีอีเมลนี้อยู่ในระบบแล้ว" }, 409);
     }
     const { data: created, error: insertError } = await admin.from("staff")
-      .insert({ user_id: invited.user.id, email, name, role: input.role, is_active: true, is_admin: false })
+      .insert({ user_id: createdAuth.user.id, email, name, role: input.role, is_active: true, is_admin: false })
       .select("user_id,email,name,role,is_active,created_at").single();
     if (insertError) {
-      console.error("invite succeeded but staff insert failed", insertError);
-      return reply({ error: "ส่งคำเชิญแล้ว แต่บันทึกสิทธิ์ไม่สำเร็จ ติดต่อผู้ดูแลฐานข้อมูล" }, 500);
+      console.error("auth user created but staff insert failed", insertError);
+      return reply({ error: "สร้างบัญชีแล้ว แต่บันทึกสิทธิ์ไม่สำเร็จ ติดต่อผู้ดูแลฐานข้อมูล" }, 500);
     }
-    return reply({ user: created, invited: true }, 201);
+    return reply({ user: created }, 201);
+  }
+
+  if (input.action === "set_password") {
+    if (typeof input.user_id !== "string" || !validUuid(input.user_id)) return reply({ error: "รหัสผู้ใช้ไม่ถูกต้อง" }, 400);
+    if (!validPassword(input.password)) return reply({ error: "รหัสผ่านต้องมี 8–128 ตัวอักษร" }, 400);
+    const { data: target, error: targetError } = await admin.from("staff")
+      .select("user_id,email,role").eq("user_id", input.user_id).maybeSingle();
+    if (targetError) {
+      console.error("password target lookup failed", targetError);
+      return reply({ error: "ตรวจบัญชีเป้าหมายไม่สำเร็จ" }, 500);
+    }
+    if (!target) return reply({ error: "ไม่พบบัญชีนี้" }, 404);
+    if (target.role === "founder") return reply({ error: "ไม่สามารถออกรหัสผ่านให้ Foundator ผ่านเว็บได้" }, 403);
+    const { error: updateError } = await admin.auth.admin.updateUserById(target.user_id, {
+      password: input.password, email_confirm: true,
+    });
+    if (updateError) {
+      console.error("issue password failed", updateError);
+      return reply({ error: "ออกรหัสผ่านใหม่ไม่สำเร็จ" }, 500);
+    }
+    return reply({ email: target.email });
   }
 
   if (input.action === "update") {

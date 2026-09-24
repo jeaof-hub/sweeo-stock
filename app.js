@@ -217,6 +217,7 @@
             <option value="false"${!u.is_active ? " selected" : ""}>ปิดใช้งาน</option>
           </select></label>
           <button class="btn sm" type="button" data-save-user>บันทึก</button>
+          <button class="btn sm" type="button" data-set-pw>ตั้งรหัสผ่าน</button>
         </div>`}
       </div>`;
     }).join("");
@@ -238,16 +239,28 @@
     event.preventDefault();
     if (currentRole !== "founder") return;
     $("uMsg").textContent = "";
+    if ($("uPw1").value !== $("uPw2").value) { $("uMsg").textContent = "รหัสผ่านสองช่องไม่ตรงกัน"; return; }
     $("uInvite").disabled = true;
     try {
-      await userAdmin("invite", { email: $("uEmail").value.trim(), name: $("uName").value.trim(), role: $("uRole").value });
+      await userAdmin("create", { email: $("uEmail").value.trim(), name: $("uName").value.trim(), role: $("uRole").value, password: $("uPw1").value });
       $("uName").value = ""; $("uEmail").value = "";
       await refreshUsers();
-      toast("ส่งคำเชิญแล้ว");
+      toast("สร้างบัญชีแล้ว แจ้งรหัสผ่านให้เจ้าของบัญชี");
     } catch (error) { $("uMsg").textContent = error.message; }
-    finally { $("uInvite").disabled = false; }
+    finally { $("uPw1").value = ""; $("uPw2").value = ""; $("uInvite").disabled = false; }
   });
   $("userList").addEventListener("click", async event => {
+    const passwordButton = event.target.closest("[data-set-pw]");
+    if (passwordButton && currentRole === "founder") {
+      const row = passwordButton.closest(".user-card");
+      const user = managedUsers.find(u => u.user_id === row.dataset.uid);
+      if (!user || user.role === "founder") return;
+      $("dUserPw").dataset.uid = user.user_id;
+      $("upEmail").textContent = user.email;
+      $("up1").value = ""; $("up2").value = ""; $("upMsg").textContent = "";
+      openDlg($("dUserPw"));
+      return;
+    }
     const button = event.target.closest("[data-save-user]");
     if (!button || currentRole !== "founder") return;
     const row = button.closest(".user-card");
@@ -263,6 +276,19 @@
       renderUsers();
       toast("บันทึกสิทธิ์แล้ว");
     } catch (error) { $("uMsg").textContent = error.message; button.disabled = false; }
+  });
+  $("userPwForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (currentRole !== "founder") return;
+    $("upMsg").textContent = "";
+    if ($("up1").value !== $("up2").value) { $("upMsg").textContent = "รหัสผ่านสองช่องไม่ตรงกัน"; return; }
+    $("upSave").disabled = true;
+    try {
+      await userAdmin("set_password", { user_id: $("dUserPw").dataset.uid, password: $("up1").value });
+      $("dUserPw").close();
+      toast("ตั้งรหัสผ่านแล้ว แจ้งรหัสใหม่ให้เจ้าของบัญชี");
+    } catch (error) { $("upMsg").textContent = error.message; }
+    finally { $("up1").value = ""; $("up2").value = ""; $("upSave").disabled = false; }
   });
 
   /* ---------- stock view ---------- */

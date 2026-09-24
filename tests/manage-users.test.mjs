@@ -10,7 +10,7 @@ function makeFunction() {
     { user_id: "c8ca56f6-28a1-4854-be30-fb99e3e26887", email: "founder@example.com", name: "Founder", role: "founder", is_active: true, created_at: "2026-09-24" },
     { user_id: "11111111-1111-4111-8111-111111111111", email: "editor@example.com", name: "Editor", role: "editor", is_active: true, created_at: "2026-09-24" },
   ];
-  let invites = 0, handler;
+  let creates = 0, passwordChanges = 0, createdAuthOptions, handler;
   const builder = () => {
     let rowFilter = () => true;
     let patch;
@@ -28,7 +28,10 @@ function makeFunction() {
   const admin = {
     auth: {
       getUser: async token => token === "bad-token" ? { data: { user: null }, error: new Error("invalid") } : { data: { user: { id: token === "editor-token" ? staff[1].user_id : staff[0].user_id } }, error: null },
-      admin: { inviteUserByEmail: async () => { invites++; return { data: { user: { id: "22222222-2222-4222-8222-222222222222" } }, error: null }; } },
+      admin: {
+        createUser: async options => { creates++; createdAuthOptions = options; return { data: { user: { id: "22222222-2222-4222-8222-222222222222" } }, error: null }; },
+        updateUserById: async () => { passwordChanges++; return { data: {}, error: null }; },
+      },
     },
     from: () => builder(),
   };
@@ -38,7 +41,7 @@ function makeFunction() {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await handler(new Request("https://example.supabase.co/functions/v1/manage-users", { method: "POST", headers, body: JSON.stringify(body) }));
     return { status: response.status, body: await response.json() };
-  }, staff, get invites() { return invites; } };
+  }, staff, get creates() { return creates; }, get passwordChanges() { return passwordChanges; }, get createdAuthOptions() { return createdAuthOptions; } };
 }
 
 test("requires a verified active Founder before any user operation", async () => {
@@ -46,23 +49,35 @@ test("requires a verified active Founder before any user operation", async () =>
   assert.equal((await fn.call(null, { action: "list" })).status, 401);
   assert.equal((await fn.call("bad-token", { action: "list" })).status, 401);
   assert.equal((await fn.call("editor-token", { action: "list" })).status, 403);
-  assert.equal(fn.invites, 0);
+  assert.equal((await fn.call("editor-token", { action: "create", email: "x@example.com", name: "X", role: "editor", password: "LongPassword1!" })).status, 403);
+  assert.equal((await fn.call("editor-token", { action: "set_password", user_id: fn.staff[0].user_id, password: "LongPassword1!" })).status, 403);
+  assert.equal(fn.creates, 0);
 });
 
 test("cannot create or modify Founder through the web API", async () => {
   const fn = makeFunction();
-  assert.equal((await fn.call("founder-token", { action: "invite", email: "next@example.com", name: "Next", role: "founder" })).status, 400);
+  assert.equal((await fn.call("founder-token", { action: "create", email: "next@example.com", name: "Next", role: "founder", password: "LongPassword1!" })).status, 400);
   assert.equal((await fn.call("founder-token", { action: "update", user_id: fn.staff[0].user_id, role: "viewer" })).status, 403);
+  assert.equal((await fn.call("founder-token", { action: "set_password", user_id: fn.staff[0].user_id, password: "AnotherPassword1!" })).status, 403);
   assert.equal(fn.staff[0].role, "founder");
-  assert.equal(fn.invites, 0);
+  assert.equal(fn.creates, 0);
+  assert.equal(fn.passwordChanges, 0);
 });
 
-test("Founder can invite an Editor and change a member to Viewer", async () => {
+test("Founder creates an Editor without email and can set a member password", async () => {
   const fn = makeFunction();
-  const invite = await fn.call("founder-token", { action: "invite", email: "new@example.com", name: "New", role: "editor" });
-  assert.equal(invite.status, 201);
-  assert.equal(fn.invites, 1);
+  const created = await fn.call("founder-token", { action: "create", email: "new@example.com", name: "New", role: "editor", password: "LongPassword1!" });
+  assert.equal(created.status, 201);
+  assert.equal(fn.creates, 1);
+  assert.equal(fn.createdAuthOptions.email_confirm, true);
+  assert.equal(fn.createdAuthOptions.password, "LongPassword1!");
+  assert.equal(created.body.password, undefined);
+  assert.equal((await fn.call("founder-token", { action: "create", email: "short@example.com", name: "Short", role: "editor", password: "short" })).status, 400);
   assert.equal(fn.staff[2].role, "editor");
+  const pw = await fn.call("founder-token", { action: "set_password", user_id: fn.staff[1].user_id, password: "AnotherPassword1!" });
+  assert.equal(pw.status, 200);
+  assert.equal(fn.passwordChanges, 1);
+  assert.equal(pw.body.password, undefined);
   const update = await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "viewer", is_active: false });
   assert.equal(update.status, 200);
   assert.equal(fn.staff[1].role, "viewer");

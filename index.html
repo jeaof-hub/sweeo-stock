@@ -105,22 +105,36 @@
 </div></dialog>
 
 <dialog id="dUsers" aria-labelledby="usersTitle"><div class="dlg">
-  <div class="dlg-head"><div><h2 id="usersTitle">จัดการผู้ใช้</h2><p>เฉพาะ Foundator เท่านั้นที่เชิญและกำหนดสิทธิ์ได้</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
+  <div class="dlg-head"><div><h2 id="usersTitle">จัดการผู้ใช้</h2><p>เฉพาะ Foundator เท่านั้นที่สร้างบัญชีและกำหนดสิทธิ์ได้</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
   <div class="dlg-body">
     <form id="inviteForm">
-      <h3>เชิญสมาชิกทีม</h3>
+      <h3>สร้างบัญชีสมาชิก</h3>
       <div class="grid">
         <div class="f"><label for="uName">ชื่อที่แสดง</label><input id="uName" maxlength="100" required autocomplete="off"></div>
         <div class="f"><label for="uEmail">อีเมล</label><input id="uEmail" type="email" required autocomplete="off"></div>
         <div class="f full"><label for="uRole">สิทธิ์</label><select id="uRole"><option value="editor">ผู้แก้ไขสต็อก</option><option value="viewer">ผู้ดูอย่างเดียว</option></select></div>
+        <div class="f"><label for="uPw1">รหัสผ่านเริ่มต้น (8–128 ตัวอักษร)</label><input id="uPw1" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
+        <div class="f"><label for="uPw2">ยืนยันรหัสผ่าน</label><input id="uPw2" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
       </div>
-      <p class="note">ระบบจะส่งลิงก์เชิญให้เจ้าของอีเมลตั้งรหัสผ่านเอง</p>
-      <button class="btn primary" id="uInvite" type="submit">ส่งคำเชิญ</button>
+      <p class="note">บัญชีจะใช้งานได้ทันที ไม่มีอีเมลเชิญ กรุณาแจ้งรหัสผ่านให้เจ้าของบัญชีด้วยช่องทางที่คุณเลือก</p>
+      <button class="btn primary" id="uInvite" type="submit">สร้างบัญชี</button>
     </form>
     <h3 class="users-heading">สมาชิกทีม</h3>
     <div id="userList" aria-live="polite">กำลังโหลดรายชื่อ</div>
   </div>
   <div class="dlg-foot"><span class="msg" id="uMsg"></span><button class="btn" type="button" data-close>ปิด</button></div>
+</div></dialog>
+
+<dialog id="dUserPw" aria-labelledby="upTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="upTitle">ตั้งรหัสผ่านสมาชิก</h2><p id="upEmail"></p></div><button class="btn x" type="button" data-close>ยกเลิก</button></div>
+  <form class="dlg-body" id="userPwForm">
+    <div class="grid">
+      <div class="f full"><label for="up1">รหัสผ่านใหม่ (8–128 ตัวอักษร)</label><input id="up1" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
+      <div class="f full"><label for="up2">ยืนยันรหัสผ่านใหม่</label><input id="up2" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
+    </div>
+    <p class="note">รหัสผ่านเดิมจะใช้ไม่ได้อีกต่อไป ระบบจะไม่ส่งอีเมล</p>
+  </form>
+  <div class="dlg-foot"><span class="msg" id="upMsg"></span><button class="btn primary" id="upSave" type="submit" form="userPwForm">บันทึกรหัสผ่าน</button></div>
 </div></dialog>
 
 <dialog id="dItem" aria-labelledby="iTitle"><div class="dlg">
@@ -186,6 +200,6 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="app.js?v=4e9ac72"></script>
+<script src="app.js?v=direct-users-1"></script>
 </body>
 </html>

@@ -47,7 +47,7 @@ create table if not exists public.movements (
   item_id     text references public.items(id) on update cascade,
   code        text not null default '',             -- เก็บรหัส/รุ่น ณ ตอนบันทึก
   model       text not null default '',
-  date        date not null,
+  date        date,
   kind        text not null check (kind in ('in','out')),
   qty         numeric not null check (qty > 0),
   customer    text not null default '',
@@ -64,6 +64,8 @@ create table if not exists public.movements (
 );
 create index if not exists movements_item_idx on public.movements(item_id) where deleted_at is null;
 create index if not exists movements_date_idx on public.movements(date);
+-- ข้อมูลเก่าจาก Sheet บางแถวไม่มีวันที่; รายการใหม่จากเว็บยังต้องมีวันที่
+alter table public.movements alter column date drop not null;
 
 -- updated_at อัตโนมัติ
 create or replace function public.touch_updated()
@@ -94,22 +96,25 @@ drop policy if exists mv_read on public.movements;
 drop policy if exists mv_insert on public.movements;
 drop policy if exists mv_update on public.movements;
 create policy mv_read   on public.movements for select to authenticated using (public.is_staff());
-create policy mv_insert on public.movements for insert to authenticated with check (public.is_staff() and created_by = auth.uid());
+create policy mv_insert on public.movements for insert to authenticated with check (public.is_staff() and created_by = auth.uid() and date is not null);
 create policy mv_update on public.movements for update to authenticated using (public.is_staff()) with check (public.is_staff());
 
 -- กันการแก้ตัวเลขย้อนหลัง: อัปเดต movements ได้เฉพาะช่อง deleted_at / deleted_by
 create or replace function public.guard_movement_update()
 returns trigger language plpgsql as $$
 begin
-  if (new.item_id, new.date, new.kind, new.qty, new.customer, new.doc_no, new.dept, new.sale, new.note, new.created_by, new.created_at)
+  if (to_jsonb(new) - 'deleted_at' - 'deleted_by')
      is distinct from
-     (old.item_id, old.date, old.kind, old.qty, old.customer, old.doc_no, old.dept, old.sale, old.note, old.created_by, old.created_at) then
+     (to_jsonb(old) - 'deleted_at' - 'deleted_by') then
     raise exception 'แก้ไขรายการที่บันทึกแล้วไม่ได้ ให้ลบแล้วบันทึกใหม่';
   end if;
   if old.deleted_at is not null then
     raise exception 'รายการนี้ถูกลบไปแล้ว';
   end if;
-  if new.deleted_at is not null then new.deleted_by := auth.uid(); end if;
+  if new.deleted_at is null then
+    raise exception 'แก้ไขรายการที่บันทึกแล้วไม่ได้ ให้ลบแล้วบันทึกใหม่';
+  end if;
+  new.deleted_by := auth.uid();
   return new;
 end $$;
 drop trigger if exists movements_guard on public.movements;

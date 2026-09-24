@@ -11,6 +11,8 @@
   const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
   const thDate = s => { if (!s) return "–"; const [y, m, d] = String(s).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }); };
   const thMonth = s => { const [y, m] = s.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("th-TH", { month: "long", year: "numeric" }); };
+  const newerFirst = (a, b) => (b.date || "").localeCompare(a.date || "") || String(b.created_at).localeCompare(String(a.created_at));
+  const olderFirst = (a, b) => (a.date || "").localeCompare(b.date || "") || String(a.created_at).localeCompare(String(b.created_at));
   const statusLabel = { red: "ต้องสั่งผลิต", amber: "ใกล้ถึงจุดสั่ง", green: "ปกติ" };
 
   /* ---------- state ---------- */
@@ -88,7 +90,7 @@
       sb.from("staff").select("user_id,name")
     ]);
     items = new Map(its.map(r => [r.id, r]));
-    entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: String(m.date).slice(0, 10) }));
+    entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
     staffNames = {}; (st.data || []).forEach(s => staffNames[s.user_id] = s.name);
   }
   async function reload() {
@@ -218,22 +220,23 @@
 
   /* ---------- log view (staff) ---------- */
   function renderLog() {
-    const months = [...new Set(entries.map(e => e.date.slice(0, 7)))].sort().reverse();
+    const months = [...new Set(entries.map(e => e.date && e.date.slice(0, 7)).filter(Boolean))].sort().reverse();
+    const hasUndated = entries.some(e => !e.date);
     const cur = $("lMonth").value, touched = $("lMonth").dataset.touched;
-    $("lMonth").innerHTML = `<option value="">ทุกเดือน</option>` + months.map(m => `<option value="${m}">${esc(thMonth(m))}</option>`).join("");
-    $("lMonth").value = (!touched && months.length) ? months[0] : (months.includes(cur) ? cur : "");
+    $("lMonth").innerHTML = `<option value="">ทุกเดือน</option>` + months.map(m => `<option value="${m}">${esc(thMonth(m))}</option>`).join("") + (hasUndated ? `<option value="__undated__">ไม่ระบุวันที่</option>` : "");
+    $("lMonth").value = (!touched && months.length) ? months[0] : (months.includes(cur) || (hasUndated && cur === "__undated__") ? cur : "");
     fillSelect($("lDept"), [...new Set(entries.map(e => e.dept).filter(Boolean))].sort(), "ทุกแผนก");
     const m = $("lMonth").value, k = $("lKind").value, dp = $("lDept").value;
     const q = $("lq").value.trim().toLowerCase(), terms = q ? q.split(/\s+/) : [];
-    const arr = entries.filter(e => (!m || e.date.startsWith(m)) && (!k || e.kind === k) && (!dp || e.dept === dp) &&
+    const arr = entries.filter(e => (m === "__undated__" ? !e.date : (!m || (e.date && e.date.startsWith(m)))) && (!k || e.kind === k) && (!dp || e.dept === dp) &&
       (!terms.length || terms.every(w => [e.customer, e.doc_no, e.dept, e.note, e.code, e.model, itemName(items.get(e.item_id))].join(" ").toLowerCase().includes(w))))
-      .sort((a, b) => b.date.localeCompare(a.date) || String(b.created_at).localeCompare(String(a.created_at)));
+      .sort(newerFirst);
     let tin = 0, tout = 0; arr.forEach(e => e.kind === "in" ? tin += e.qty : tout += e.qty);
     $("lcount").textContent = `${fmt(arr.length)} รายการ  ส่งออกรวม ${fmt(tout)} ชิ้น  รับเข้ารวม ${fmt(tin)} ชิ้น`;
     if (!arr.length) { $("log").innerHTML = `<div class="state"><h2>ไม่มีรายการในช่วงนี้</h2><p>เปลี่ยนเดือนหรือตัวกรอง หรือกดบันทึกส่งออก/รับเข้าด้านล่าง</p></div>`; return; }
-    let html = `<div class="log">`, lastDay = "";
+    let html = `<div class="log">`, lastDay;
     arr.slice(0, 500).forEach(e => {
-      if (e.date !== lastDay) { html += `<div class="day">${esc(thDate(e.date))}</div>`; lastDay = e.date; }
+      if (e.date !== lastDay) { html += `<div class="day">${e.date ? esc(thDate(e.date)) : "ไม่ระบุวันที่"}</div>`; lastDay = e.date; }
       const it = items.get(e.item_id);
       const sub = [e.customer, e.doc_no, e.dept, staffNames[e.created_by]].filter(Boolean).join("  |  ");
       html += `<button type="button" class="row" data-eid="${esc(e.id)}"><div class="m">${esc(it ? itemName(it) : (e.model || e.code || "(ไม่ทราบรุ่น)"))}</div>
@@ -261,7 +264,7 @@
     if (mode === "staff") {
       fillDatalist($("typeList"), [...new Set(its.map(i => i.type))].sort());
       fillDatalist($("itemDeptList"), [...new Set(its.map(i => i.dept))].sort());
-      const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+      const sorted = [...entries].sort(newerFirst);
       const recent = a => [...new Set(a.filter(Boolean))].slice(0, 80);
       fillDatalist($("custList"), recent(sorted.map(e => e.customer)));
       fillDatalist($("deptList"), [...new Set(entries.map(e => e.dept).filter(Boolean))].sort());
@@ -284,7 +287,7 @@
         <p class="note">สอบถามรายละเอียดเพิ่มเติมกับฝ่ายขาย</p>`;
       openDlg($("dItem")); return;
     }
-    const hist = entries.filter(e => e.item_id === id).sort((a, b) => b.date.localeCompare(a.date) || String(b.created_at).localeCompare(String(a.created_at)));
+    const hist = entries.filter(e => e.item_id === id).sort(newerFirst);
     const avg = Number(it.avg_month), rop = Number(it.rop) || 0;
     const cover = avg > 0 ? c.bal / avg : null;
     let h = `<div class="flow"><div><small>ยอดยกมา</small><b>${fmt(Number(it.opening))}</b></div><div><small>รับเข้า</small><b>${fmt(c.inQ)}</b></div><div><small>ส่งออก</small><b>${fmt(c.out)}</b></div><div class="bal"><small>คงเหลือ</small><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b></div></div>
@@ -502,9 +505,9 @@
     const s1 = [["No.", "LED types", "Department", "Lot No.", "Model No.", "Specifications", "ยอดยกมา", "STOCK IN", "SOLD", "BALANCE", "Location", "Remark", "ขายเฉลี่ย/เดือน", "จุดสั่งผลิต (ROP)", "สถานะ"]];
     its.forEach(([id, it], i) => { const c = calc.get(id); s1.push([i + 1, it.type, it.dept, it.code, it.model, it.spec, Number(it.opening) || 0, c.inQ, c.out, c.bal, it.loc, it.remark, it.avg_month, it.rop, c.status ? statusLabel[c.status] : ""]); });
     const s2 = [["Date", "Customer / Source", "INV No.", "Department", "Sale", "Model name", "Model No.", "Quantity (out)", "STOCK IN", "Note", "Recorded by"]];
-    [...entries].sort((a, b) => a.date.localeCompare(b.date) || String(a.created_at).localeCompare(String(b.created_at))).forEach(e => {
+    [...entries].sort(olderFirst).forEach(e => {
       const it = items.get(e.item_id);
-      s2.push([e.date, e.customer, e.doc_no, e.dept, e.sale, it ? (it.model || e.model) : e.model, it ? (it.code || e.code) : e.code, e.kind === "out" ? e.qty : "", e.kind === "in" ? e.qty : "", e.note, staffNames[e.created_by] || (e.source === "sheet" ? "Google Sheet" : "")]);
+      s2.push([e.date || "", e.customer, e.doc_no, e.dept, e.sale, it ? (it.model || e.model) : e.model, it ? (it.code || e.code) : e.code, e.kind === "out" ? e.qty : "", e.kind === "in" ? e.qty : "", e.note, staffNames[e.created_by] || (e.source === "sheet" ? "Google Sheet" : "")]);
     });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), "Stock");

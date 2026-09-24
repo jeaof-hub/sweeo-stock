@@ -1,0 +1,10 @@
+# Keep stock exports and migration data out of the public repository.
+supabase-data-DO-NOT-UPLOAD/
+migration/private/
+*.xlsx
+*.xls
+*.csv
+.env
+.env.*
+__pycache__/
+*.pyc

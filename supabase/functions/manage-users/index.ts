@@ -20,7 +20,7 @@ const reply = (body, status = 200) => new Response(JSON.stringify(body), {
   headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
 });
 const validEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
-const validRole = role => role === "editor" || role === "viewer";
+const validRole = role => role === "sales" || role === "warehouse" || role === "manager";
 const validUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const validPassword = value => typeof value === "string" && value.length >= 8 && value.length <= 128;
 

@@ -1,7 +1,8 @@
 /* SWEEO Stock — GitHub Pages + Supabase
  * Visitor (ไม่ล็อกอิน): เห็นเฉพาะยอดคงเหลือผ่านฟังก์ชัน public_stock()
- * Viewer: เห็นรายละเอียดสต็อกและประวัติ แต่แก้ไขไม่ได้
- * Founder / Editor: อ่านและบันทึกรับเข้า/ส่งออก ปรับยอด แก้ไขสินค้า
+ * Sales: อ่านรายละเอียดสต็อกและประวัติ
+ * Warehouse: บันทึกรับเข้า/ส่งออก และลบรายการของตนเองในวันเดียวกัน
+ * Manager / Founder: จัดการสินค้า ปรับยอด ส่งออกข้อมูล และดูรายการที่ถูกลบ
  */
 (function () {
   "use strict";
@@ -18,15 +19,22 @@
 
   /* ---------- state ---------- */
   let sb = null;
-  let mode = "visitor";            // "visitor" | "viewer" | "staff"
+  let mode = "visitor";            // "visitor" | "member"
   let session = null;
-  let currentRole = null;            // "founder" | "editor" | "viewer" | null
+  let currentRole = null;          // "founder" | "manager" | "warehouse" | "sales" | null
   let items = new Map();           // id -> item
   let entries = [];                // movements (not deleted)
+  let deletedEntries = [];         // manager / founder audit view
+  let stockChanges = [];           // founder-only change log
   let calc = new Map();            // id -> {inQ,out,bal,status}
   let staffNames = {};
   let statusFilter = "";
   let channel = null, reloadTimer = null, loading = false;
+  const canRecord = () => ["founder", "manager", "warehouse"].includes(currentRole);
+  const canManageStock = () => ["founder", "manager"].includes(currentRole);
+  const bangkokDate = value => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
+  const canDeleteEntry = e => !!e && (canManageStock() || (currentRole === "warehouse" && e.created_by === session?.user.id && bangkokDate(e.created_at) === bangkokDate(Date.now())));
+  const recorderLabel = (uid, source) => staffNames[uid] || (source === "sheet" ? "Google Sheet" : uid === session?.user.id ? "คุณ" : "พนักงาน");
   // Supabase may remove the invite URL fragment while restoring the session.
   const authParams = new URLSearchParams(location.hash.replace(/^#/, ""));
   const authUrlType = authParams.get("type");
@@ -105,22 +113,27 @@
   /* ---------- loading ---------- */
   async function loadVisitor() {
     const rows = await fetchAll(() => sb.rpc("public_stock").order("id"));
-    items = new Map(rows.map(r => [r.id, r])); entries = [];
+    items = new Map(rows.map(r => [r.id, r])); entries = []; deletedEntries = []; stockChanges = [];
   }
   async function loadMember() {
-    const [its, mvs, st] = await Promise.all([
+    const [its, mvs, audit, st, changes] = await Promise.all([
       fetchAll(() => sb.from("items").select("*").eq("active", true).order("id")),
       fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
-      sb.rpc("staff_display_names")
+      canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false })) : Promise.resolve([]),
+      currentRole === "founder" ? sb.rpc("staff_display_names") : Promise.resolve({ data: [] }),
+      currentRole === "founder" ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(200) : Promise.resolve({ data: [] })
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
+    deletedEntries = audit.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
+    if (changes.error) throw changes.error;
+    stockChanges = changes.data || [];
     staffNames = {}; (st.data || []).forEach(s => staffNames[s.user_id] = s.name);
   }
   async function reload() {
     if (loading) return; loading = true;
     try {
-      if (mode !== "visitor") await loadMember(); else await loadVisitor();
+      if (mode === "member") await loadMember(); else await loadVisitor();
       renderAll();
       $("status").textContent = `${fmt(items.size)} รายการ  อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.`;
     } catch (err) {
@@ -143,15 +156,19 @@
     session = s;
     currentRole = null;
     if (s) { const { data, error } = await sb.rpc("my_role"); if (!error) currentRole = data; }
-    mode = ["founder", "editor"].includes(currentRole) ? "staff" : currentRole === "viewer" ? "viewer" : "visitor";
-    const isStaff = mode === "staff", isMember = mode !== "visitor";
+    if (currentRole === "editor") currentRole = "warehouse";
+    if (currentRole === "viewer") currentRole = "sales";
+    mode = ["founder", "manager", "warehouse", "sales"].includes(currentRole) ? "member" : "visitor";
+    const isMember = mode === "member";
     $("loginBtn").hidden = !!s; $("userMenu").hidden = !s;
     $("meEmail").textContent = s ? s.user.email : "";
-    $("roleBadge").textContent = { founder: "Foundator", editor: "ผู้แก้ไข", viewer: "ผู้ดู" }[currentRole] || "ผู้เยี่ยมชม";
+    $("roleBadge").textContent = { founder: "ผู้ก่อตั้ง", manager: "ผู้จัดการ", warehouse: "คลังสินค้า", sales: "ฝ่ายขาย" }[currentRole] || "ผู้เยี่ยมชม";
     $("roleBadge").classList.toggle("staff", isMember);
     $("roleBadge").classList.toggle("founder", currentRole === "founder");
-    $("tabs").hidden = !isMember; $("actions").hidden = !isStaff; $("newItemBtn").hidden = !isStaff;
-    $("alerts").hidden = !isMember; $("exportBtn").hidden = !isMember;
+    $("tabs").hidden = !isMember; $("actions").hidden = !canRecord(); $("newItemBtn").hidden = !canManageStock();
+    $("tabAudit").hidden = !canManageStock();
+    $("tabChanges").hidden = currentRole !== "founder";
+    $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
     $("manageUsersBtn").hidden = currentRole !== "founder";
     document.querySelectorAll("[data-member]").forEach(o => { o.hidden = !isMember; o.disabled = !isMember; });
     if (!isMember && ["avgDesc", "cover"].includes($("fSort").value)) $("fSort").value = "order";
@@ -165,8 +182,8 @@
       $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = "";
       openDlg($("dPw"));
     }
-    if (!isMember) setTab("stock");
-    items = new Map(); entries = []; statusFilter = "";
+    if (!isMember || !canManageStock() && !$("viewAudit").hidden || currentRole !== "founder" && !$("viewChanges").hidden) setTab("stock");
+    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
     if (isMember) subscribe(); else unsubscribe();
@@ -219,10 +236,11 @@
       const founder = u.role === "founder";
       return `<div class="user-card" data-uid="${esc(u.user_id)}">
         <div class="user-meta"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div>
-        ${founder ? '<span class="badge founder">Foundator</span>' : `<div class="user-controls">
+        ${founder ? '<span class="badge founder">ผู้ก่อตั้ง</span>' : `<div class="user-controls">
           <label>สิทธิ์ <select class="user-role" aria-label="สิทธิ์ของ ${esc(u.email)}">
-            <option value="editor"${u.role === "editor" ? " selected" : ""}>ผู้แก้ไขสต็อก</option>
-            <option value="viewer"${u.role === "viewer" ? " selected" : ""}>ผู้ดูอย่างเดียว</option>
+            <option value="sales"${["sales", "viewer"].includes(u.role) ? " selected" : ""}>ฝ่ายขาย</option>
+            <option value="warehouse"${["warehouse", "editor"].includes(u.role) ? " selected" : ""}>คลังสินค้า</option>
+            <option value="manager"${u.role === "manager" ? " selected" : ""}>ผู้จัดการ</option>
           </select></label>
           <label>สถานะ <select class="user-active" aria-label="สถานะของ ${esc(u.email)}">
             <option value="true"${u.is_active ? " selected" : ""}>ใช้งาน</option>
@@ -339,7 +357,7 @@
     else arr.sort((a, b) => (a[1].sort_order || 9e9) - (b[1].sort_order || 9e9));
     $("count").textContent = `แสดง ${fmt(arr.length)} จาก ${fmt(items.size)} รายการ`;
     const list = $("list");
-    if (!items.size) { list.innerHTML = `<div class="state"><h2>ยังไม่มีข้อมูลสินค้า</h2><p>${mode === "staff" ? "กดเพิ่มสินค้าใหม่ หรือนำเข้าข้อมูลตามคู่มือ" : "ยังไม่มีสินค้าที่แสดงได้"}</p></div>`; return; }
+    if (!items.size) { list.innerHTML = `<div class="state"><h2>ยังไม่มีข้อมูลสินค้า</h2><p>${canManageStock() ? "กดเพิ่มสินค้าใหม่ หรือนำเข้าข้อมูลตามคู่มือ" : "ยังไม่มีสินค้าที่แสดงได้"}</p></div>`; return; }
     if (!arr.length) { list.innerHTML = `<div class="state"><h2>ไม่พบรายการที่ตรงกับเงื่อนไข</h2><p>ลองลบคำค้นหา เปลี่ยนประเภท หรือยกเลิกตัวกรองด้านบน</p></div>`; return; }
     list.innerHTML = arr.slice(0, 300).map(([id, it, c]) => {
       const st = c.status ? `<span class="tag st-${c.status}">${statusLabel[c.status]}</span>` : "";
@@ -380,7 +398,7 @@
     arr.slice(0, 500).forEach(e => {
       if (e.date !== lastDay) { html += `<div class="day">${e.date ? esc(thDate(e.date)) : "ไม่ระบุวันที่"}</div>`; lastDay = e.date; }
       const it = items.get(e.item_id);
-      const sub = [e.customer, e.doc_no, e.dept, staffNames[e.created_by]].filter(Boolean).join("  |  ");
+      const sub = [e.customer, e.doc_no, e.dept, recorderLabel(e.created_by, e.source)].filter(Boolean).join("  |  ");
       html += `<button type="button" class="row" data-eid="${esc(e.id)}"><div class="m">${esc(it ? itemName(it) : (e.model || e.code || "(ไม่ทราบรุ่น)"))}</div>
         <div class="q ${e.kind}">${e.kind === "in" ? "+" : "−"}${fmt(e.qty)}<small>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</small></div>
         <div class="s">${esc(sub || "–")}</div></button>`;
@@ -393,17 +411,45 @@
   function setTab(which) {
     $("tabStock").setAttribute("aria-selected", String(which === "stock"));
     $("tabLog").setAttribute("aria-selected", String(which === "log"));
-    $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log";
+    $("tabAudit").setAttribute("aria-selected", String(which === "audit"));
+    $("tabChanges").setAttribute("aria-selected", String(which === "changes"));
+    $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes";
     if (which === "log") renderLog();
+    if (which === "audit") renderAudit();
+    if (which === "changes") renderChangeLog();
   }
-  $("tabStock").onclick = () => setTab("stock"); $("tabLog").onclick = () => setTab("log");
+  $("tabStock").onclick = () => setTab("stock"); $("tabLog").onclick = () => setTab("log"); $("tabAudit").onclick = () => { if (canManageStock()) setTab("audit"); };
+  $("tabChanges").onclick = () => { if (currentRole === "founder") setTab("changes"); };
+
+  function renderAudit() {
+    if (!canManageStock()) return;
+    $("auditCount").textContent = `${fmt(deletedEntries.length)} รายการที่ถูกลบ`;
+    $("auditList").innerHTML = deletedEntries.length ? `<div class="log">${deletedEntries.map(e => {
+      const item = items.get(e.item_id);
+      const who = currentRole === "founder" ? recorderLabel(e.deleted_by, e.source) : e.deleted_by === session?.user.id ? "คุณ" : "พนักงาน";
+      return `<div class="row"><div class="m">${esc(item ? itemName(item) : (e.model || e.code || "รายการ"))}</div><div class="q ${e.kind}">${e.kind === "in" ? "+" : "−"}${fmt(e.qty)}<small>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</small></div><div class="s">${esc(thDate(e.date))}  |  ${esc(e.customer || "–")}  |  ${esc(e.doc_no || "–")}<br>ลบเมื่อ ${esc(new Date(e.deleted_at).toLocaleString("th-TH"))} โดย ${esc(who)}</div></div>`;
+    }).join("")}</div>` : '<div class="state"><h2>ยังไม่มีรายการที่ถูกลบ</h2></div>';
+  }
+
+  function renderChangeLog() {
+    if (currentRole !== "founder") return;
+    $("changesCount").textContent = `แสดง ${fmt(stockChanges.length)} การเปลี่ยนแปลงล่าสุด (เริ่มเก็บตั้งแต่เปิดใช้ระบบบันทึก)`;
+    const labels = { insert: "เพิ่ม", update: "แก้ไข", delete: "ลบ", soft_delete: "ลบรายการ" };
+    $("changesList").innerHTML = stockChanges.length ? `<div class="log">${stockChanges.map(c => {
+      const data = c.after_data || c.before_data || {};
+      const title = c.entity === "items" ? "สินค้า" : "รายการรับเข้า/ส่งออก";
+      const model = data.model || data.code || c.entity_id;
+      const actor = c.actor_id ? (staffNames[c.actor_id] || "บัญชีที่ไม่อยู่ในทีม") : "ระบบ/ผู้ดูแลฐานข้อมูล";
+      return `<details class="row change-row"><summary><b>${esc(labels[c.action] || c.action)}${esc(title)}: ${esc(model)}</b><small>${esc(new Date(c.occurred_at).toLocaleString("th-TH"))} · ${esc(actor)}</small></summary><div class="change-data"><strong>ก่อน</strong><pre>${esc(c.before_data ? JSON.stringify(c.before_data, null, 2) : "–")}</pre><strong>หลัง</strong><pre>${esc(c.after_data ? JSON.stringify(c.after_data, null, 2) : "–")}</pre></div></details>`;
+    }).join("")}</div>` : '<div class="state"><h2>ยังไม่มีการเปลี่ยนแปลงหลังเปิดใช้ log</h2></div>';
+  }
 
   function renderAll() {
     recompute();
     const its = [...items.values()];
     fillSelect($("fType"), [...new Set(its.map(i => i.type))].sort(), "ทุกประเภท");
     fillSelect($("fDept"), [...new Set(its.map(i => i.dept))].sort(), "ทุกแผนก");
-    if (mode === "staff") {
+    if (canRecord()) {
       fillDatalist($("typeList"), [...new Set(its.map(i => i.type))].sort());
       fillDatalist($("itemDeptList"), [...new Set(its.map(i => i.dept))].sort());
       const sorted = [...entries].sort(newerFirst);
@@ -414,6 +460,8 @@
     }
     renderAlerts(); renderList();
     if (!$("viewLog").hidden) renderLog();
+    if (!$("viewAudit").hidden) renderAudit();
+    if (!$("viewChanges").hidden) renderChangeLog();
     if ($("dItem").open && $("dItem").dataset.id && items.has($("dItem").dataset.id)) openItem($("dItem").dataset.id);
   }
 
@@ -433,15 +481,15 @@
     const avg = Number(it.avg_month), rop = Number(it.rop) || 0;
     const cover = avg > 0 ? c.bal / avg : null;
     let h = `<div class="flow"><div><small>ยอดยกมา</small><b>${fmt(Number(it.opening))}</b></div><div><small>รับเข้า</small><b>${fmt(c.inQ)}</b></div><div><small>ส่งออก</small><b>${fmt(c.out)}</b></div><div class="bal"><small>คงเหลือ</small><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b></div></div>
-      ${mode === "staff" ? '<div class="btnrow"><button class="btn primary sm" type="button" data-act="out">ส่งออกรายการนี้</button><button class="btn sm" type="button" data-act="in">รับเข้า</button><button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button></div>' : ""}
+      ${canRecord() || canManageStock() ? `<div class="btnrow">${canRecord() ? '<button class="btn primary sm" type="button" data-act="out">ส่งออกรายการนี้</button><button class="btn sm" type="button" data-act="in">รับเข้า</button>' : ""}${canManageStock() ? '<button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button>' : ""}</div>` : ""}
       <dl class="meta"><dt>รหัสสินค้า</dt><dd>${esc(it.code || "–")}</dd><dt>ประเภท</dt><dd>${esc(it.type)}</dd><dt>แผนก</dt><dd>${esc(it.dept)}</dd><dt>ที่เก็บ</dt><dd>${esc(it.loc || "–")}</dd>
       ${it.avg_month != null ? `<dt>ขายเฉลี่ยต่อเดือน</dt><dd>${fmt(avg)} ชิ้น</dd>` : ""}${rop ? `<dt>จุดสั่งผลิต</dt><dd>${fmt(rop)} ชิ้น${c.status ? " (" + statusLabel[c.status] + ")" : ""}</dd>` : ""}
       ${cover !== null ? `<dt>พอขายอีกประมาณ</dt><dd>${fmt(cover)} เดือน</dd>` : ""}<dt>หมายเหตุ</dt><dd>${esc(it.remark || "–")}</dd></dl><h3>ประวัติรับเข้า/ส่งออก</h3>`;
     if (!hist.length) h += `<p class="note">ยังไม่มีรายการรับเข้าหรือส่งออกของสินค้านี้</p>`;
     else {
-      h += `<div class="tbl"><table><thead><tr><th>วันที่</th><th>ลูกค้า / เอกสาร</th><th>แผนก</th><th class="n">ส่งออก</th><th class="n">รับเข้า</th><th>ผู้บันทึก</th>${mode === "staff" ? "<th></th>" : ""}</tr></thead><tbody>`;
+      h += `<div class="tbl"><table><thead><tr><th>วันที่</th><th>ลูกค้า / เอกสาร</th><th>แผนก</th><th class="n">ส่งออก</th><th class="n">รับเข้า</th><th>ผู้บันทึก</th>${canRecord() ? "<th></th>" : ""}</tr></thead><tbody>`;
       hist.forEach(e => {
-        h += `<tr><td>${esc(thDate(e.date))}</td><td class="w">${esc([e.customer, e.doc_no].filter(Boolean).join(" / ") || "–")}${e.note ? `<br><small>${esc(e.note)}</small>` : ""}</td><td>${esc(e.dept || "–")}</td><td class="n">${e.kind === "out" ? fmt(e.qty) : ""}</td><td class="n in">${e.kind === "in" ? fmt(e.qty) : ""}</td><td>${esc(staffNames[e.created_by] || (e.source === "sheet" ? "Google Sheet" : "–"))}</td>${mode === "staff" ? `<td><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบ</button></td>` : ""}</tr>`;
+        h += `<tr><td>${esc(thDate(e.date))}</td><td class="w">${esc([e.customer, e.doc_no].filter(Boolean).join(" / ") || "–")}${e.note ? `<br><small>${esc(e.note)}</small>` : ""}</td><td>${esc(e.dept || "–")}</td><td class="n">${e.kind === "out" ? fmt(e.qty) : ""}</td><td class="n in">${e.kind === "in" ? fmt(e.qty) : ""}</td><td>${esc(recorderLabel(e.created_by, e.source))}</td>${canRecord() ? `<td>${canDeleteEntry(e) ? `<button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบ</button>` : ""}</td>` : ""}</tr>`;
       });
       h += `</tbody></table></div>`;
     }
@@ -449,13 +497,13 @@
     openDlg($("dItem"));
   }
   $("iBody").addEventListener("click", e => {
-    const b = e.target.closest("button"); if (!b || mode !== "staff") return;
+    const b = e.target.closest("button"); if (!b) return;
     const id = $("dItem").dataset.id;
     if (b.dataset.del) return confirmDelete(b.dataset.del);
     const a = b.dataset.act;
-    if (a === "out" || a === "in") { $("dItem").close(); openEntryForm(a, id); }
-    if (a === "count") openCount(id);
-    if (a === "edit") openEdit(id);
+    if (canRecord() && (a === "out" || a === "in")) { $("dItem").close(); openEntryForm(a, id); }
+    if (canManageStock() && a === "count") openCount(id);
+    if (canManageStock() && a === "edit") openEdit(id);
   });
   function openEntry(eid) {
     const e = entries.find(x => x.id === eid); if (!e) return;
@@ -464,7 +512,7 @@
     $("iTitle").textContent = e.model || e.code || "รายการ"; $("iSub").textContent = "รหัสนี้ไม่อยู่ในรายการสินค้า";
     $("iBody").innerHTML = `<dl class="meta"><dt>วันที่</dt><dd>${esc(thDate(e.date))}</dd><dt>รหัส</dt><dd>${esc(e.code || "–")}</dd><dt>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</dt><dd>${fmt(e.qty)} ชิ้น</dd><dt>ลูกค้า</dt><dd>${esc(e.customer || "–")}</dd><dt>เอกสาร</dt><dd>${esc(e.doc_no || "–")}</dd><dt>แผนก</dt><dd>${esc(e.dept || "–")}</dd></dl>
       <p class="note">รายการนี้ไม่ถูกนับเข้าสต็อกของสินค้าใด เพราะรหัสไม่ตรงกับรายการสินค้า</p>
-      ${mode === "staff" ? `<div class="btnrow"><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบรายการนี้</button></div>` : ""}`;
+      ${canDeleteEntry(e) ? `<div class="btnrow"><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบรายการนี้</button></div>` : ""}`;
     openDlg($("dItem"));
   }
 
@@ -519,6 +567,7 @@
     line.querySelector("[data-rm]").addEventListener("click", () => { line.remove(); if (!$("eLines").children.length) addLine(); });
   }
   function openEntryForm(kind, itemId) {
+    if (!canRecord()) return;
     formKind = kind;
     $("eTitle").textContent = kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า";
     $("eSub").textContent = kind === "out" ? "ตัดสต็อกตามใบส่งของ ใส่ได้หลายรายการในเอกสารเดียว" : "เพิ่มสต็อกจากการรับสินค้าเข้าคลัง";
@@ -535,6 +584,7 @@
   $("outBtn").onclick = () => openEntryForm("out");
   $("inBtn").onclick = () => openEntryForm("in");
   $("eSave").onclick = async () => {
+    if (!canRecord()) return;
     const date = $("eDate").value, msg = $("eMsg"); msg.textContent = "";
     if (!date) { msg.textContent = "ใส่วันที่ก่อนบันทึก"; return; }
     const rows = [];
@@ -558,6 +608,7 @@
 
   /* ---------- count adjust ---------- */
   function openCount(id) {
+    if (!canManageStock()) return;
     const it = items.get(id), c = calc.get(id);
     $("dCount").dataset.id = id;
     $("cSub").textContent = `${itemName(it)}  คงเหลือในระบบ ${fmt(c.bal)}`;
@@ -572,6 +623,7 @@
   }
   $("cQty").addEventListener("input", updCount);
   $("cSave").onclick = async () => {
+    if (!canManageStock()) return;
     const id = $("dCount").dataset.id, c = calc.get(id), v = $("cQty").value, it = items.get(id);
     if (v === "" || Number(v) < 0 || !Number.isFinite(Number(v))) { $("cMsg").textContent = "ใส่จำนวนที่นับได้ (0 ขึ้นไป)"; return; }
     const d = Number(v) - c.bal;
@@ -579,7 +631,7 @@
     $("cSave").disabled = true;
     const { error } = await sb.from("movements").insert({ item_id: id, code: it.code || "", model: it.model || "", date: $("cDate").value || today(),
       kind: d > 0 ? "in" : "out", qty: Math.abs(d), customer: "ปรับยอดตามการตรวจนับ", dept: "Stock Adjust",
-      note: [`นับได้ ${Number(v)}`, $("cNote").value.trim()].filter(Boolean).join("  "), source: "app", created_by: session.user.id });
+      note: [`นับได้ ${Number(v)}`, $("cNote").value.trim()].filter(Boolean).join("  "), source: "adjustment", created_by: session.user.id });
     $("cSave").disabled = false;
     if (error) { $("cMsg").textContent = dbErr(error); return; }
     $("dCount").close(); toast("ปรับยอดแล้ว คงเหลือ " + fmt(Number(v))); reload();
@@ -587,6 +639,7 @@
 
   /* ---------- item edit / new ---------- */
   function openEdit(id) {
+    if (!canManageStock()) return;
     const it = id ? items.get(id) : { type: "", dept: "", opening: 0 };
     $("dEdit").dataset.id = id || ""; delete $("xSave").dataset.ok;
     $("edTitle").textContent = id ? "แก้ไขข้อมูลสินค้า" : "เพิ่มสินค้าใหม่";
@@ -600,6 +653,7 @@
   }
   $("newItemBtn").onclick = () => openEdit(null);
   $("xSave").onclick = async () => {
+    if (!canManageStock()) return;
     const id = $("dEdit").dataset.id, numOrNull = v => v === "" ? null : Number(v);
     const data = { code: $("xCode").value.trim(), model: $("xModel").value.trim(), spec: $("xSpec").value.trim(),
       type: $("xType").value.trim() || "ไม่ระบุ", dept: $("xDept").value.trim() || "ไม่ระบุ", loc: $("xLoc").value.trim(),
@@ -624,7 +678,7 @@
 
   /* ---------- delete (soft) ---------- */
   function confirmDelete(eid) {
-    const e = entries.find(x => x.id === eid); if (!e) return;
+    const e = entries.find(x => x.id === eid); if (!canDeleteEntry(e)) return;
     $("dConfirm").dataset.eid = eid;
     $("kTitle").textContent = `ลบรายการ${e.kind === "in" ? "รับเข้า" : "ส่งออก"} ${fmt(e.qty)} ชิ้น`;
     $("kSub").textContent = `${thDate(e.date)}  ${[e.customer, e.doc_no].filter(Boolean).join(" / ")}  ยอดคงเหลือของสินค้านี้จะเปลี่ยนตาม ระบบเก็บประวัติการลบไว้`;
@@ -632,6 +686,7 @@
   }
   $("kOk").onclick = async () => {
     const eid = $("dConfirm").dataset.eid;
+    if (!canDeleteEntry(entries.find(e => e.id === eid))) { $("kMsg").textContent = "บัญชีนี้ไม่มีสิทธิ์ลบรายการนี้"; return; }
     $("kOk").disabled = true;
     const { error } = await sb.from("movements").update({ deleted_at: new Date().toISOString() }).eq("id", eid);
     $("kOk").disabled = false;
@@ -641,6 +696,7 @@
 
   /* ---------- export ---------- */
   $("exportBtn").onclick = () => {
+    if (!canManageStock()) return;
     $("menuPop").hidden = true;
     if (typeof XLSX === "undefined") { toast("โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ"); return; }
     const its = [...items.entries()].sort((a, b) => (a[1].sort_order || 0) - (b[1].sort_order || 0));
@@ -649,7 +705,7 @@
     const s2 = [["Date", "Customer / Source", "INV No.", "Department", "Sale", "Model name", "Model No.", "Quantity (out)", "STOCK IN", "Note", "Recorded by"]];
     [...entries].sort(olderFirst).forEach(e => {
       const it = items.get(e.item_id);
-      s2.push([e.date || "", e.customer, e.doc_no, e.dept, e.sale, it ? (it.model || e.model) : e.model, it ? (it.code || e.code) : e.code, e.kind === "out" ? e.qty : "", e.kind === "in" ? e.qty : "", e.note, staffNames[e.created_by] || (e.source === "sheet" ? "Google Sheet" : "")]);
+      s2.push([e.date || "", e.customer, e.doc_no, e.dept, e.sale, it ? (it.model || e.model) : e.model, it ? (it.code || e.code) : e.code, e.kind === "out" ? e.qty : "", e.kind === "in" ? e.qty : "", e.note, recorderLabel(e.created_by, e.source)]);
     });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), "Stock");

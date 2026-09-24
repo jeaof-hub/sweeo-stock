@@ -41,7 +41,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
 .btn.danger{color:var(--red);border-color:var(--red-soft)}
 .btn.sm{padding:5px 10px;font-size:.85rem}
-.tabs{display:flex;gap:4px;margin-top:10px}
+.tabs{display:flex;gap:4px;margin-top:10px;flex-wrap:wrap}
 .tab{border:none;background:none;padding:8px 14px;border-bottom:3px solid transparent;cursor:pointer;font-weight:500;color:var(--muted)}
 .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--brand)}
 
@@ -93,6 +93,11 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .row .q{grid-row:1/3;grid-column:2;align-self:center;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;font-size:1.1rem}
 .row .q.in{color:var(--in)} .row .q.out{color:var(--out)}
 .row .q small{display:block;font-weight:400;font-size:.72rem;color:var(--muted)}
+.change-row{display:block;cursor:default}
+.change-row summary{cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.change-row summary small{color:var(--muted);font-weight:400}
+.change-data{padding:12px 0 4px}
+.change-data pre{overflow:auto;max-height:260px;padding:10px;border-radius:8px;background:var(--bg);font-size:.75rem;white-space:pre-wrap;word-break:break-word}
 
 .state{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:28px 20px;text-align:center;color:var(--muted)}
 .state h2{color:var(--ink);font-size:1.1rem;margin:0 0 6px}

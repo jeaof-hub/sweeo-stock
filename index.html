@@ -37,6 +37,8 @@
     <div class="tabs" role="tablist" id="tabs" hidden>
       <button class="tab" role="tab" id="tabStock" aria-selected="true" type="button">สต็อก</button>
       <button class="tab" role="tab" id="tabLog" aria-selected="false" type="button">ประวัติรับเข้า/ส่งออก</button>
+      <button class="tab" role="tab" id="tabAudit" aria-selected="false" type="button" hidden>รายการที่ถูกลบ</button>
+      <button class="tab" role="tab" id="tabChanges" aria-selected="false" type="button" hidden>บันทึกการเปลี่ยนแปลง</button>
     </div>
   </header>
 
@@ -73,6 +75,16 @@
     </div>
     <div class="count"><span id="lcount"></span></div>
     <div id="log"></div>
+  </section>
+
+  <section id="viewAudit" hidden>
+    <div class="count"><span id="auditCount"></span></div>
+    <div id="auditList"></div>
+  </section>
+
+  <section id="viewChanges" hidden>
+    <div class="count"><span id="changesCount"></span></div>
+    <div id="changesList"></div>
   </section>
 </div>
 
@@ -112,7 +124,7 @@
       <div class="grid">
         <div class="f"><label for="uName">ชื่อที่แสดง</label><input id="uName" maxlength="100" required autocomplete="off"></div>
         <div class="f"><label for="uEmail">อีเมล</label><input id="uEmail" type="email" required autocomplete="off"></div>
-        <div class="f full"><label for="uRole">สิทธิ์</label><select id="uRole"><option value="editor">ผู้แก้ไขสต็อก</option><option value="viewer">ผู้ดูอย่างเดียว</option></select></div>
+        <div class="f full"><label for="uRole">สิทธิ์</label><select id="uRole"><option value="sales">ฝ่ายขาย</option><option value="warehouse">คลังสินค้า</option><option value="manager">ผู้จัดการ</option></select></div>
         <div class="f"><label for="uPw1">รหัสผ่านเริ่มต้น (8–128 ตัวอักษร)</label><input id="uPw1" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
         <div class="f"><label for="uPw2">ยืนยันรหัสผ่าน</label><input id="uPw2" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
       </div>
@@ -200,6 +212,6 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="app.js?v=viewer-read-1"></script>
+<script src="app.js?v=role-matrix-1"></script>
 </body>
 </html>

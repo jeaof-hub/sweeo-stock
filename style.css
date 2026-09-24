@@ -175,3 +175,13 @@ td.w{white-space:normal;min-width:150px}
 .menu .pop button:last-child{border-bottom:none}
 .menu .pop button:hover{background:var(--bg)}
 .menu .pop .me{padding:10px 14px;font-size:.82rem;color:var(--muted);border-bottom:1px solid var(--line);word-break:break-all}
+
+/* Founder / user-management additions */
+.badge.founder{background:var(--amber-soft);color:var(--amber);border-color:transparent;font-weight:600}
+.urow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.urow .info{flex:1;min-width:160px}
+.urow .info b{display:block;font-weight:600}
+.urow .info span{color:var(--muted);font-size:.85rem;word-break:break-all}
+.urow .tag.role-founder{background:var(--amber-soft);color:var(--amber);font-weight:600}
+.urow .tag.role-staff{background:var(--green-soft);color:var(--green)}
+.urow .tag.inactive{background:var(--red-soft);color:var(--red);font-weight:600}

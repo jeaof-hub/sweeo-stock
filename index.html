@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=role-matrix-1">
+<link rel="stylesheet" href="style.css?v=i18n-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -20,6 +20,7 @@
       <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></div>
       <div class="title"><h1>สต็อกสินค้า SWEEO</h1><p id="status">กำลังโหลดข้อมูล</p></div>
       <div class="who">
+        <button class="btn lang-switch" id="langSwitch" type="button" aria-label="Switch to English" title="Switch to English">EN</button>
         <span class="badge" id="roleBadge">ผู้เยี่ยมชม</span>
         <button class="btn" id="loginBtn" type="button">เข้าสู่ระบบ</button>
         <div class="menu" id="userMenu" hidden>
@@ -212,6 +213,7 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="app.js?v=owner-roles-1"></script>
+<script src="i18n.js?v=1"></script>
+<script src="app.js?v=i18n-1"></script>
 </body>
 </html>

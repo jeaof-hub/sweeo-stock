@@ -8,11 +8,12 @@
   "use strict";
   const $ = id => document.getElementById(id);
   const nf = new Intl.NumberFormat("en-US");
+  const locale = window.SWEEO_I18N?.lang === "en" ? "en-GB" : "th-TH";
   const fmt = n => (n === null || n === undefined || isNaN(n)) ? "–" : nf.format(Math.round(n * 10) / 10);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
   const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-  const thDate = s => { if (!s) return "–"; const [y, m, d] = String(s).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" }); };
-  const thMonth = s => { const [y, m] = s.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString("th-TH", { month: "long", year: "numeric" }); };
+  const thDate = s => { if (!s) return "–"; const [y, m, d] = String(s).slice(0, 10).split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString(locale, { day: "numeric", month: "short", year: "2-digit" }); };
+  const thMonth = s => { const [y, m] = s.split("-").map(Number); return new Date(y, m - 1, 1).toLocaleDateString(locale, { month: "long", year: "numeric" }); };
   const newerFirst = (a, b) => (b.date || "").localeCompare(a.date || "") || String(b.created_at).localeCompare(String(a.created_at));
   const olderFirst = (a, b) => (a.date || "").localeCompare(b.date || "") || String(a.created_at).localeCompare(String(b.created_at));
   const statusLabel = { red: "ต้องสั่งผลิต", amber: "ใกล้ถึงจุดสั่ง", green: "ปกติ" };
@@ -138,7 +139,7 @@
     try {
       if (mode === "member") await loadMember(); else await loadVisitor();
       renderAll();
-      $("status").textContent = `${fmt(items.size)} รายการ  อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.`;
+      $("status").textContent = `${fmt(items.size)} รายการ  อัปเดต ${new Date().toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })} น.`;
     } catch (err) {
       if (!items.size) fatal("โหลดข้อมูลไม่สำเร็จ", dbErr(err).replace("บันทึกไม่สำเร็จ: ", "") + "  รีเฟรชหน้าแล้วลองใหม่");
       else $("status").textContent = "โหลดข้อมูลล่าสุดไม่สำเร็จ กำลังแสดงข้อมูลชุดเดิม";
@@ -433,7 +434,7 @@
     $("auditList").innerHTML = deletedEntries.length ? `<div class="log">${deletedEntries.map(e => {
       const item = items.get(e.item_id);
       const who = canManageUsers() ? recorderLabel(e.deleted_by, e.source) : e.deleted_by === session?.user.id ? "คุณ" : "พนักงาน";
-      return `<div class="row"><div class="m">${esc(item ? itemName(item) : (e.model || e.code || "รายการ"))}</div><div class="q ${e.kind}">${e.kind === "in" ? "+" : "−"}${fmt(e.qty)}<small>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</small></div><div class="s">${esc(thDate(e.date))}  |  ${esc(e.customer || "–")}  |  ${esc(e.doc_no || "–")}<br>ลบเมื่อ ${esc(new Date(e.deleted_at).toLocaleString("th-TH"))} โดย ${esc(who)}</div></div>`;
+      return `<div class="row"><div class="m">${esc(item ? itemName(item) : (e.model || e.code || "รายการ"))}</div><div class="q ${e.kind}">${e.kind === "in" ? "+" : "−"}${fmt(e.qty)}<small>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</small></div><div class="s">${esc(thDate(e.date))}  |  ${esc(e.customer || "–")}  |  ${esc(e.doc_no || "–")}<br>ลบเมื่อ ${esc(new Date(e.deleted_at).toLocaleString(locale))} โดย ${esc(who)}</div></div>`;
     }).join("")}</div>` : '<div class="state"><h2>ยังไม่มีรายการที่ถูกลบ</h2></div>';
   }
 
@@ -446,7 +447,7 @@
       const title = c.entity === "items" ? "สินค้า" : "รายการรับเข้า/ส่งออก";
       const model = data.model || data.code || c.entity_id;
       const actor = c.actor_id ? (staffNames[c.actor_id] || "บัญชีที่ไม่อยู่ในทีม") : "ระบบ/ผู้ดูแลฐานข้อมูล";
-      return `<details class="row change-row"><summary><b>${esc(labels[c.action] || c.action)}${esc(title)}: ${esc(model)}</b><small>${esc(new Date(c.occurred_at).toLocaleString("th-TH"))} · ${esc(actor)}</small></summary><div class="change-data"><strong>ก่อน</strong><pre>${esc(c.before_data ? JSON.stringify(c.before_data, null, 2) : "–")}</pre><strong>หลัง</strong><pre>${esc(c.after_data ? JSON.stringify(c.after_data, null, 2) : "–")}</pre></div></details>`;
+      return `<details class="row change-row"><summary><b>${esc(labels[c.action] || c.action)}${esc(title)}: ${esc(model)}</b><small>${esc(new Date(c.occurred_at).toLocaleString(locale))} · ${esc(actor)}</small></summary><div class="change-data"><strong>ก่อน</strong><pre>${esc(c.before_data ? JSON.stringify(c.before_data, null, 2) : "–")}</pre><strong>หลัง</strong><pre>${esc(c.after_data ? JSON.stringify(c.after_data, null, 2) : "–")}</pre></div></details>`;
     }).join("")}</div>${moreStockChanges ? '<button class="btn" type="button" id="loadMoreChanges">โหลดรายการเก่าเพิ่ม</button>' : ""}` : '<div class="state"><h2>ยังไม่มีการเปลี่ยนแปลงหลังเปิดใช้ log</h2></div>';
   }
   $("changesList").addEventListener("click", async event => {
@@ -718,8 +719,10 @@
     $("menuPop").hidden = true;
     if (typeof XLSX === "undefined") { toast("โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ"); return; }
     const its = [...items.entries()].sort((a, b) => (a[1].sort_order || 0) - (b[1].sort_order || 0));
-    const s1 = [["No.", "LED types", "Department", "Lot No.", "Model No.", "Specifications", "ยอดยกมา", "STOCK IN", "SOLD", "BALANCE", "Location", "Remark", "ขายเฉลี่ย/เดือน", "จุดสั่งผลิต (ROP)", "สถานะ"]];
-    its.forEach(([id, it], i) => { const c = calc.get(id); s1.push([i + 1, it.type, it.dept, it.code, it.model, it.spec, Number(it.opening) || 0, c.inQ, c.out, c.bal, it.loc, it.remark, it.avg_month, it.rop, c.status ? statusLabel[c.status] : ""]); });
+    const s1 = [locale === "en-GB"
+      ? ["No.", "LED types", "Department", "Lot No.", "Model No.", "Specifications", "Opening balance", "STOCK IN", "SOLD", "BALANCE", "Location", "Remark", "Average sales/month", "Reorder point (ROP)", "Status"]
+      : ["No.", "LED types", "Department", "Lot No.", "Model No.", "Specifications", "ยอดยกมา", "STOCK IN", "SOLD", "BALANCE", "Location", "Remark", "ขายเฉลี่ย/เดือน", "จุดสั่งผลิต (ROP)", "สถานะ"]];
+    its.forEach(([id, it], i) => { const c = calc.get(id); s1.push([i + 1, it.type, it.dept, it.code, it.model, it.spec, Number(it.opening) || 0, c.inQ, c.out, c.bal, it.loc, it.remark, it.avg_month, it.rop, c.status ? (locale === "en-GB" ? window.SWEEO_I18N.translate(statusLabel[c.status]) : statusLabel[c.status]) : ""]); });
     const s2 = [["Date", "Customer / Source", "INV No.", "Department", "Sale", "Model name", "Model No.", "Quantity (out)", "STOCK IN", "Note", "Recorded by"]];
     [...entries].sort(olderFirst).forEach(e => {
       const it = items.get(e.item_id);

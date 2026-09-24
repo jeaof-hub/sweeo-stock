@@ -171,6 +171,8 @@ td.w{white-space:normal;min-width:150px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:20;font-size:.92rem;max-width:90vw}
 
 .who{display:flex;gap:8px;align-items:center}
+.lang-switch{min-width:42px;padding:6px 9px;font-size:.82rem;font-weight:700}
+@media (max-width:520px){.bar{gap:6px;flex-wrap:wrap}.who{gap:5px;width:100%;justify-content:flex-end}.who>.btn,.who>.menu>.btn{padding:6px 8px;font-size:.82rem}.title h1{font-size:1rem}}
 .badge{font-size:.75rem;padding:3px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .badge.staff{background:var(--green-soft);color:var(--green);border-color:transparent}
 .badge.founder{background:var(--amber-soft);color:var(--amber);border-color:transparent;font-weight:700}

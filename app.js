@@ -26,6 +26,7 @@
   let entries = [];                // movements (not deleted)
   let deletedEntries = [];         // manager / founder audit view
   let stockChanges = [];           // founder-only change log
+  let moreStockChanges = false;
   let calc = new Map();            // id -> {inQ,out,bal,status}
   let staffNames = {};
   let statusFilter = "";
@@ -113,7 +114,7 @@
   /* ---------- loading ---------- */
   async function loadVisitor() {
     const rows = await fetchAll(() => sb.rpc("public_stock").order("id"));
-    items = new Map(rows.map(r => [r.id, r])); entries = []; deletedEntries = []; stockChanges = [];
+    items = new Map(rows.map(r => [r.id, r])); entries = []; deletedEntries = []; stockChanges = []; moreStockChanges = false;
   }
   async function loadMember() {
     const [its, mvs, audit, st, changes] = await Promise.all([
@@ -121,13 +122,14 @@
       fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
       canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false })) : Promise.resolve([]),
       currentRole === "founder" ? sb.rpc("staff_display_names") : Promise.resolve({ data: [] }),
-      currentRole === "founder" ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(200) : Promise.resolve({ data: [] })
+      currentRole === "founder" ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201) : Promise.resolve({ data: [] })
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
     deletedEntries = audit.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
     if (changes.error) throw changes.error;
-    stockChanges = changes.data || [];
+    stockChanges = (changes.data || []).slice(0, 200);
+    moreStockChanges = (changes.data || []).length > 200;
     staffNames = {}; (st.data || []).forEach(s => staffNames[s.user_id] = s.name);
   }
   async function reload() {
@@ -183,7 +185,7 @@
       openDlg($("dPw"));
     }
     if (!isMember || !canManageStock() && !$("viewAudit").hidden || currentRole !== "founder" && !$("viewChanges").hidden) setTab("stock");
-    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; statusFilter = "";
+    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
     if (isMember) subscribe(); else unsubscribe();
@@ -433,7 +435,7 @@
 
   function renderChangeLog() {
     if (currentRole !== "founder") return;
-    $("changesCount").textContent = `แสดง ${fmt(stockChanges.length)} การเปลี่ยนแปลงล่าสุด (เริ่มเก็บตั้งแต่เปิดใช้ระบบบันทึก)`;
+    $("changesCount").textContent = `แสดง ${fmt(stockChanges.length)} การเปลี่ยนแปลง${moreStockChanges ? "ล่าสุด" : "ทั้งหมด"} (เริ่มเก็บตั้งแต่เปิดใช้ระบบบันทึก)`;
     const labels = { insert: "เพิ่ม", update: "แก้ไข", delete: "ลบ", soft_delete: "ลบรายการ" };
     $("changesList").innerHTML = stockChanges.length ? `<div class="log">${stockChanges.map(c => {
       const data = c.after_data || c.before_data || {};
@@ -441,8 +443,20 @@
       const model = data.model || data.code || c.entity_id;
       const actor = c.actor_id ? (staffNames[c.actor_id] || "บัญชีที่ไม่อยู่ในทีม") : "ระบบ/ผู้ดูแลฐานข้อมูล";
       return `<details class="row change-row"><summary><b>${esc(labels[c.action] || c.action)}${esc(title)}: ${esc(model)}</b><small>${esc(new Date(c.occurred_at).toLocaleString("th-TH"))} · ${esc(actor)}</small></summary><div class="change-data"><strong>ก่อน</strong><pre>${esc(c.before_data ? JSON.stringify(c.before_data, null, 2) : "–")}</pre><strong>หลัง</strong><pre>${esc(c.after_data ? JSON.stringify(c.after_data, null, 2) : "–")}</pre></div></details>`;
-    }).join("")}</div>` : '<div class="state"><h2>ยังไม่มีการเปลี่ยนแปลงหลังเปิดใช้ log</h2></div>';
+    }).join("")}</div>${moreStockChanges ? '<button class="btn" type="button" id="loadMoreChanges">โหลดรายการเก่าเพิ่ม</button>' : ""}` : '<div class="state"><h2>ยังไม่มีการเปลี่ยนแปลงหลังเปิดใช้ log</h2></div>';
   }
+  $("changesList").addEventListener("click", async event => {
+    const button = event.target.closest("#loadMoreChanges");
+    if (!button || currentRole !== "founder" || !moreStockChanges || !stockChanges.length) return;
+    button.disabled = true;
+    const { data, error } = await sb.from("stock_audit")
+      .select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data")
+      .lt("id", stockChanges[stockChanges.length - 1].id).order("id", { ascending: false }).limit(201);
+    if (error) { button.disabled = false; toast("โหลด log เก่าไม่สำเร็จ"); return; }
+    stockChanges.push(...data.slice(0, 200));
+    moreStockChanges = data.length > 200;
+    renderChangeLog();
+  });
 
   function renderAll() {
     recompute();

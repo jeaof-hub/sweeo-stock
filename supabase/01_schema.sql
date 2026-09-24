@@ -157,9 +157,11 @@ revoke all on function public.my_role() from public;
 grant execute on function public.my_role() to authenticated;
 
 -- สิทธิ์ระดับตาราง (RLS เป็นตัวกรองชั้นที่สอง)
-revoke all on public.staff, public.items, public.movements from anon;
-revoke delete, truncate on public.staff, public.items, public.movements from authenticated;
+revoke all on public.staff from public, anon, authenticated;
 grant select on public.staff to authenticated;
+grant select, insert, update on public.staff to service_role;
+revoke all on public.items, public.movements from anon;
+revoke delete, truncate on public.items, public.movements from authenticated;
 grant select, insert, update on public.items, public.movements to authenticated;
 
 -- อัปเดตสด (Realtime) สำหรับหน้าจอ staff

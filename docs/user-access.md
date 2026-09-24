@@ -22,6 +22,7 @@ GitHub Pages app ── publishable key + user JWT ──► Supabase Auth
 ```
 
 The service-role key is injected into the Edge Function by Supabase. It never appears in GitHub Pages or the public repository.
+The `service_role` database role needs explicit `SELECT`, `INSERT`, and `UPDATE` grants on `staff`. Browser roles have only `SELECT` on that table, further limited by RLS.
 
 ## Access matrix
 

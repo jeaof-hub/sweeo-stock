@@ -4,6 +4,7 @@
   const lang = localStorage.getItem("sweeo-language") === "en" ? "en" : "th";
   window.SWEEO_I18N = { lang };
   document.documentElement.lang = lang;
+  if (lang === "en") document.title = "SWEEO Stock";
 
   const english = {
     "สต็อกสินค้า SWEEO": "SWEEO Stock",

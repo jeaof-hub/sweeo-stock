@@ -26,12 +26,9 @@ end $$;
 update public.staff set role = 'founder' where is_admin;
 alter table public.staff alter column email set not null;
 
-do $$
-begin
-  if not exists (select 1 from pg_constraint where conname = 'staff_role_check' and conrelid = 'public.staff'::regclass) then
-    alter table public.staff add constraint staff_role_check check (role in ('founder', 'editor', 'viewer'));
-  end if;
-end $$;
+alter table public.staff drop constraint if exists staff_role_check;
+update public.staff set role = 'editor' where role = 'staff';
+alter table public.staff add constraint staff_role_check check (role in ('founder', 'editor', 'viewer'));
 
 create unique index if not exists staff_email_unique on public.staff (lower(email));
 create unique index if not exists staff_one_founder on public.staff ((true)) where role = 'founder';

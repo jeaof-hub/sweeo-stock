@@ -19,6 +19,7 @@
 | `supabase/01_schema.sql` | สร้างตาราง สิทธิ์ และฟังก์ชัน |
 | `supabase/04_user_roles.sql` | อัปเกรดฐานข้อมูลที่ใช้งานอยู่ให้มีบทบาท Foundator / Editor / Viewer |
 | `supabase/05_manage_users_permissions.sql` | ให้ Edge Function อ่าน/เพิ่ม/แก้สิทธิ์ทีม โดยบัญชีเว็บแก้ตาราง `staff` ตรง ๆ ไม่ได้ |
+| `supabase/06_fix_role_constraint.sql` | แทนข้อจำกัดบทบาทรุ่นเก่าที่ไม่รับ Editor / Viewer |
 | `supabase/functions/manage-users/index.ts` | Edge Function สำหรับจัดการผู้ใช้โดย Foundator |
 
 ไฟล์ข้อมูลตั้งต้น (`02_seed_items.sql`, `03_seed_movements.sql`) อยู่นอกโฟลเดอร์นี้โดยตั้งใจ
@@ -72,8 +73,9 @@ select id, lower(email), 'ชื่อผู้ก่อตั้ง', 'founder'
 from auth.users where email = 'founder@example.com';
 ```
 5. สำหรับฐานข้อมูลที่สร้างก่อนแก้สิทธิ์นี้ ให้รัน `supabase/05_manage_users_permissions.sql` ใน SQL Editor เพื่อให้ `service_role` เข้าถึง `staff` ได้; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
-6. ไปที่ **Edge Functions → Deploy a new function → Via Editor** ตั้งชื่อ `manage-users` แล้ววางโค้ดจาก `supabase/functions/manage-users/index.ts` และ Deploy จากนั้นปิด **Verify JWT with legacy secret** ใน Settings เพราะฟังก์ชันตรวจ JWT ผ่าน Supabase Auth เองและตรวจบทบาทใน `staff` ทุกครั้ง
-7. Foundator เข้าสู่ระบบเว็บ กด **บัญชี → จัดการผู้ใช้** เพื่อเชิญสมาชิกและเลือกสิทธิ์ ผู้รับคำเชิญเปิดลิงก์ในอีเมลแล้วตั้งรหัสผ่านในหน้าที่เว็บแสดง
+6. สำหรับฐานข้อมูลเดิมที่เคยมีบทบาท `staff` ให้รัน `supabase/06_fix_role_constraint.sql` เพื่อให้รับบทบาท Editor / Viewer; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีข้อจำกัดที่ถูกต้องแล้ว
+7. ไปที่ **Edge Functions → Deploy a new function → Via Editor** ตั้งชื่อ `manage-users` แล้ววางโค้ดจาก `supabase/functions/manage-users/index.ts` และ Deploy จากนั้นปิด **Verify JWT with legacy secret** ใน Settings เพราะฟังก์ชันตรวจ JWT ผ่าน Supabase Auth เองและตรวจบทบาทใน `staff` ทุกครั้ง
+8. Foundator เข้าสู่ระบบเว็บ กด **บัญชี → จัดการผู้ใช้** เพื่อเชิญสมาชิกและเลือกสิทธิ์ ผู้รับคำเชิญเปิดลิงก์ในอีเมลแล้วตั้งรหัสผ่านในหน้าที่เว็บแสดง
 
 การปิดใช้งานหรือเปลี่ยนสิทธิ์ทำได้ในหน้าเดียวกัน บัญชีที่ล็อกอินได้แต่ไม่อยู่ใน `staff` จะเห็นเหมือนผู้เยี่ยมชม อ่านรายละเอียดสิทธิ์ที่ [docs/user-access.md](docs/user-access.md)
 

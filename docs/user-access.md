@@ -4,7 +4,7 @@
 
 - The existing `is_admin=true` account is the sole **Foundator** (stored as `founder`).
 - Only Foundator can create users, set their passwords, or change their role and active status from the web app.
-- Team roles are **Editor** (read and change stock, see history) and **Viewer** (see only the same stock balances as visitors).
+- Team roles are **Editor** (read and change stock, see history) and **Viewer** (read internal stock details and movement history, including customer and document fields, without changing data).
 - Foundator cannot be changed or disabled through the web app. A project owner can recover access in the Supabase dashboard if needed.
 - Self-signup stays disabled. Foundator enters each member's email and initial password in the web app and conveys the password to the member separately.
 
@@ -29,12 +29,13 @@ The `service_role` database role needs explicit `SELECT`, `INSERT`, and `UPDATE`
 | Action | Visitor | Viewer | Editor | Foundator |
 |---|---:|---:|---:|---:|
 | View product list and balances | ✓ | ✓ | ✓ | ✓ |
-| View movement history and private stock fields | | | ✓ | ✓ |
+| View movement history and private stock fields | | ✓ | ✓ | ✓ |
+| Export stock and movement history | | ✓ | ✓ | ✓ |
 | Record movements and edit products | | | ✓ | ✓ |
 | Create users, set passwords or change rights | | | | ✓ |
 | Change Foundator rights through the web | | | | |
 
-The `staff.role` column is authoritative. `is_staff()` returns true only for active `founder` or `editor` rows, so existing stock RLS policies enforce the matrix. `my_role()` returns only the caller's active role for the UI. Direct writes to `staff` are not granted to browser users.
+The `staff.role` column is authoritative. `is_reader()` returns true for active `founder`, `editor`, or `viewer` rows and gates internal reads. `is_staff()` returns true only for active `founder` or `editor` rows and gates writes. `my_role()` returns only the caller's active role for the UI. Direct writes to `staff` are not granted to browser users.
 
 ## API contract
 

@@ -24,12 +24,28 @@ as $$
   select exists (select 1 from public.staff s where s.user_id = auth.uid() and s.is_active and s.role in ('founder', 'editor'));
 $$;
 
+-- ผู้ใช้ที่อ่านข้อมูลภายในได้: Founder, Editor และ Viewer ที่ยังใช้งาน
+create or replace function public.is_reader()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (select 1 from public.staff s where s.user_id = auth.uid() and s.is_active and s.role in ('founder', 'editor', 'viewer'));
+$$;
+
 -- บทบาทของบัญชีปัจจุบันเท่านั้น; NULL เมื่อไม่มีสิทธิ์หรือถูกปิดใช้งาน
 create or replace function public.my_role()
 returns text
 language sql stable security definer set search_path = public
 as $$
   select s.role from public.staff s where s.user_id = auth.uid() and s.is_active;
+$$;
+
+-- ชื่อผู้บันทึกสำหรับประวัติ โดยไม่เปิดอีเมลและบทบาทของสมาชิกให้ Viewer
+create or replace function public.staff_display_names()
+returns table (user_id uuid, name text)
+language sql stable security definer set search_path = public
+as $$
+  select s.user_id, s.name from public.staff s where public.is_reader();
 $$;
 
 -- ---------- สินค้า ----------
@@ -96,19 +112,19 @@ alter table public.movements enable row level security;
 drop policy if exists staff_read on public.staff;
 create policy staff_read on public.staff for select to authenticated using (public.is_staff() or user_id = auth.uid());
 
--- items: staff อ่าน/เพิ่ม/แก้ได้ ; ไม่มีสิทธิ์ลบ (ใช้ active = false แทน)
+-- items: สมาชิกอ่านได้; เฉพาะ Founder/Editor เพิ่มและแก้ได้
 drop policy if exists items_read on public.items;
 drop policy if exists items_insert on public.items;
 drop policy if exists items_update on public.items;
-create policy items_read   on public.items for select to authenticated using (public.is_staff());
+create policy items_read   on public.items for select to authenticated using (public.is_reader());
 create policy items_insert on public.items for insert to authenticated with check (public.is_staff());
 create policy items_update on public.items for update to authenticated using (public.is_staff()) with check (public.is_staff());
 
--- movements: staff อ่าน/เพิ่มได้ ; แก้ได้เฉพาะการลบแบบ soft delete ; ไม่มีสิทธิ์ลบจริง
+-- movements: สมาชิกอ่านได้; เฉพาะ Founder/Editor เพิ่มและลบแบบ soft delete ได้
 drop policy if exists mv_read on public.movements;
 drop policy if exists mv_insert on public.movements;
 drop policy if exists mv_update on public.movements;
-create policy mv_read   on public.movements for select to authenticated using (public.is_staff());
+create policy mv_read   on public.movements for select to authenticated using (public.is_reader());
 create policy mv_insert on public.movements for insert to authenticated with check (public.is_staff() and created_by = auth.uid() and date is not null);
 create policy mv_update on public.movements for update to authenticated using (public.is_staff()) with check (public.is_staff());
 
@@ -153,8 +169,12 @@ revoke all on function public.public_stock() from public;
 grant execute on function public.public_stock() to anon, authenticated;
 revoke all on function public.is_staff() from public;
 grant execute on function public.is_staff() to anon, authenticated;
+revoke all on function public.is_reader() from public;
+grant execute on function public.is_reader() to authenticated;
 revoke all on function public.my_role() from public;
 grant execute on function public.my_role() to authenticated;
+revoke all on function public.staff_display_names() from public;
+grant execute on function public.staff_display_names() to authenticated;
 
 -- สิทธิ์ระดับตาราง (RLS เป็นตัวกรองชั้นที่สอง)
 revoke all on public.staff from public, anon, authenticated;

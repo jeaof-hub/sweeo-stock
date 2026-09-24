@@ -1,6 +1,7 @@
 /* SWEEO Stock — GitHub Pages + Supabase
  * Visitor (ไม่ล็อกอิน): เห็นเฉพาะยอดคงเหลือผ่านฟังก์ชัน public_stock()
- * Staff (ล็อกอิน + อยู่ในตาราง staff): บันทึกรับเข้า/ส่งออก ปรับยอด แก้ไขสินค้า ดูประวัติ
+ * Viewer: เห็นรายละเอียดสต็อกและประวัติ แต่แก้ไขไม่ได้
+ * Founder / Editor: อ่านและบันทึกรับเข้า/ส่งออก ปรับยอด แก้ไขสินค้า
  */
 (function () {
   "use strict";
@@ -17,7 +18,7 @@
 
   /* ---------- state ---------- */
   let sb = null;
-  let mode = "visitor";            // "visitor" | "staff"
+  let mode = "visitor";            // "visitor" | "viewer" | "staff"
   let session = null;
   let currentRole = null;            // "founder" | "editor" | "viewer" | null
   let items = new Map();           // id -> item
@@ -106,11 +107,11 @@
     const rows = await fetchAll(() => sb.rpc("public_stock").order("id"));
     items = new Map(rows.map(r => [r.id, r])); entries = [];
   }
-  async function loadStaff() {
+  async function loadMember() {
     const [its, mvs, st] = await Promise.all([
       fetchAll(() => sb.from("items").select("*").eq("active", true).order("id")),
       fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
-      sb.from("staff").select("user_id,name")
+      sb.rpc("staff_display_names")
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
@@ -119,7 +120,7 @@
   async function reload() {
     if (loading) return; loading = true;
     try {
-      if (mode === "staff") await loadStaff(); else await loadVisitor();
+      if (mode !== "visitor") await loadMember(); else await loadVisitor();
       renderAll();
       $("status").textContent = `${fmt(items.size)} รายการ  อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.`;
     } catch (err) {
@@ -142,20 +143,20 @@
     session = s;
     currentRole = null;
     if (s) { const { data, error } = await sb.rpc("my_role"); if (!error) currentRole = data; }
-    mode = ["founder", "editor"].includes(currentRole) ? "staff" : "visitor";
-    const isStaff = mode === "staff";
+    mode = ["founder", "editor"].includes(currentRole) ? "staff" : currentRole === "viewer" ? "viewer" : "visitor";
+    const isStaff = mode === "staff", isMember = mode !== "visitor";
     $("loginBtn").hidden = !!s; $("userMenu").hidden = !s;
     $("meEmail").textContent = s ? s.user.email : "";
     $("roleBadge").textContent = { founder: "Foundator", editor: "ผู้แก้ไข", viewer: "ผู้ดู" }[currentRole] || "ผู้เยี่ยมชม";
-    $("roleBadge").classList.toggle("staff", isStaff);
+    $("roleBadge").classList.toggle("staff", isMember);
     $("roleBadge").classList.toggle("founder", currentRole === "founder");
-    $("tabs").hidden = !isStaff; $("actions").hidden = !isStaff; $("newItemBtn").hidden = !isStaff;
-    $("alerts").hidden = !isStaff; $("exportBtn").hidden = !isStaff;
+    $("tabs").hidden = !isMember; $("actions").hidden = !isStaff; $("newItemBtn").hidden = !isStaff;
+    $("alerts").hidden = !isMember; $("exportBtn").hidden = !isMember;
     $("manageUsersBtn").hidden = currentRole !== "founder";
-    document.querySelectorAll("[data-staff]").forEach(o => { o.hidden = !isStaff; o.disabled = !isStaff; });
-    if (!isStaff && ["avgDesc", "cover"].includes($("fSort").value)) $("fSort").value = "order";
+    document.querySelectorAll("[data-member]").forEach(o => { o.hidden = !isMember; o.disabled = !isMember; });
+    if (!isMember && ["avgDesc", "cover"].includes($("fSort").value)) $("fSort").value = "order";
     const b = $("banner");
-    if (s && !isStaff) { b.hidden = false; b.textContent = currentRole === "viewer" ? "บัญชีนี้มีสิทธิ์ดูยอดคงเหลือเท่านั้น" : "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อ Foundator"; }
+    if (s && !isMember) { b.hidden = false; b.textContent = "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อ Foundator"; }
     else b.hidden = true;
     if (invitePending && s) {
       invitePending = false;
@@ -164,11 +165,11 @@
       $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = "";
       openDlg($("dPw"));
     }
-    if (!isStaff) setTab("stock");
+    if (!isMember) setTab("stock");
     items = new Map(); entries = []; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
-    if (isStaff) subscribe(); else unsubscribe();
+    if (isMember) subscribe(); else unsubscribe();
   }
 
   $("loginBtn").onclick = () => { $("lgMsg").textContent = ""; openDlg($("dLogin")); setTimeout(() => $("lgEmail").focus(), 50); };
@@ -304,7 +305,7 @@
 
   /* ---------- stock view ---------- */
   function renderAlerts() {
-    if (mode !== "staff") return;
+    if (mode === "visitor") return;
     const c = { red: 0, amber: 0, neg: 0 };
     items.forEach((it, id) => { const k = calc.get(id); if (k.status === "red") c.red++; if (k.status === "amber") c.amber++; if (k.bal < 0) c.neg++; });
     const defs = [["", items.size, "รายการทั้งหมด", ""], ["red", c.red, "ต้องสั่งผลิต", "red"], ["amber", c.amber, "ใกล้ถึงจุดสั่ง", "amber"]];
@@ -344,7 +345,7 @@
       const st = c.status ? `<span class="tag st-${c.status}">${statusLabel[c.status]}</span>` : "";
       let g = "";
       const rop = Number(it.rop) || 0;
-      if (mode === "staff" && rop) {
+      if (mode !== "visitor" && rop) {
         const pct = Math.max(0, Math.min(1, c.bal / (rop * 2))) * 100;
         const col = c.status === "red" ? "var(--red)" : c.status === "amber" ? "var(--amber)" : "var(--green)";
         g = `<div class="gauge" aria-hidden="true"><div class="track"><div class="fill" style="width:${pct}%;background:${col}"></div><div class="rop"></div></div><div class="legend"><span>0</span><span>จุดสั่ง ${fmt(rop)}</span><span>${fmt(rop * 2)}+</span></div></div>`;
@@ -352,7 +353,7 @@
       return `<button type="button" class="item" data-id="${esc(id)}"><div class="model">${esc(itemName(it))}</div>
         <div class="qty"><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b><small>คงเหลือ</small></div>
         <div class="spec">${esc(it.model ? it.spec : "")}</div>
-        <div class="tags">${st}<span class="tag">${esc(it.type)}</span><span class="tag">${esc(it.dept)}</span>${mode === "staff" && it.loc ? `<span class="tag">ที่เก็บ ${esc(it.loc)}</span>` : ""}${it.code ? `<span class="tag">${esc(it.code)}</span>` : ""}</div>${g}</button>`;
+        <div class="tags">${st}<span class="tag">${esc(it.type)}</span><span class="tag">${esc(it.dept)}</span>${mode !== "visitor" && it.loc ? `<span class="tag">ที่เก็บ ${esc(it.loc)}</span>` : ""}${it.code ? `<span class="tag">${esc(it.code)}</span>` : ""}</div>${g}</button>`;
     }).join("") + (arr.length > 300 ? `<p class="count">แสดง 300 รายการแรก พิมพ์คำค้นหาเพื่อกรองให้แคบลง</p>` : "");
   }
   $("list").addEventListener("click", e => { const b = e.target.closest(".item"); if (b) openItem(b.dataset.id); });
@@ -374,7 +375,7 @@
       .sort(newerFirst);
     let tin = 0, tout = 0; arr.forEach(e => e.kind === "in" ? tin += e.qty : tout += e.qty);
     $("lcount").textContent = `${fmt(arr.length)} รายการ  ส่งออกรวม ${fmt(tout)} ชิ้น  รับเข้ารวม ${fmt(tin)} ชิ้น`;
-    if (!arr.length) { $("log").innerHTML = `<div class="state"><h2>ไม่มีรายการในช่วงนี้</h2><p>เปลี่ยนเดือนหรือตัวกรอง หรือกดบันทึกส่งออก/รับเข้าด้านล่าง</p></div>`; return; }
+    if (!arr.length) { $("log").innerHTML = `<div class="state"><h2>ไม่มีรายการในช่วงนี้</h2><p>เปลี่ยนเดือนหรือตัวกรองด้านบน</p></div>`; return; }
     let html = `<div class="log">`, lastDay;
     arr.slice(0, 500).forEach(e => {
       if (e.date !== lastDay) { html += `<div class="day">${e.date ? esc(thDate(e.date)) : "ไม่ระบุวันที่"}</div>`; lastDay = e.date; }
@@ -422,7 +423,7 @@
     const c = calc.get(id);
     $("dItem").dataset.id = id;
     $("iTitle").textContent = itemName(it); $("iSub").textContent = it.model ? it.spec : "";
-    if (mode !== "staff") {
+    if (mode === "visitor") {
       $("iBody").innerHTML = `<div class="flow" style="grid-template-columns:1fr"><div class="bal"><small>คงเหลือ</small><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b></div></div>
         <dl class="meta"><dt>รหัสสินค้า</dt><dd>${esc(it.code || "–")}</dd><dt>ประเภท</dt><dd>${esc(it.type)}</dd><dt>แผนก</dt><dd>${esc(it.dept)}</dd></dl>
         <p class="note">สอบถามรายละเอียดเพิ่มเติมกับฝ่ายขาย</p>`;
@@ -432,15 +433,15 @@
     const avg = Number(it.avg_month), rop = Number(it.rop) || 0;
     const cover = avg > 0 ? c.bal / avg : null;
     let h = `<div class="flow"><div><small>ยอดยกมา</small><b>${fmt(Number(it.opening))}</b></div><div><small>รับเข้า</small><b>${fmt(c.inQ)}</b></div><div><small>ส่งออก</small><b>${fmt(c.out)}</b></div><div class="bal"><small>คงเหลือ</small><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b></div></div>
-      <div class="btnrow"><button class="btn primary sm" type="button" data-act="out">ส่งออกรายการนี้</button><button class="btn sm" type="button" data-act="in">รับเข้า</button><button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button></div>
+      ${mode === "staff" ? '<div class="btnrow"><button class="btn primary sm" type="button" data-act="out">ส่งออกรายการนี้</button><button class="btn sm" type="button" data-act="in">รับเข้า</button><button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button></div>' : ""}
       <dl class="meta"><dt>รหัสสินค้า</dt><dd>${esc(it.code || "–")}</dd><dt>ประเภท</dt><dd>${esc(it.type)}</dd><dt>แผนก</dt><dd>${esc(it.dept)}</dd><dt>ที่เก็บ</dt><dd>${esc(it.loc || "–")}</dd>
       ${it.avg_month != null ? `<dt>ขายเฉลี่ยต่อเดือน</dt><dd>${fmt(avg)} ชิ้น</dd>` : ""}${rop ? `<dt>จุดสั่งผลิต</dt><dd>${fmt(rop)} ชิ้น${c.status ? " (" + statusLabel[c.status] + ")" : ""}</dd>` : ""}
       ${cover !== null ? `<dt>พอขายอีกประมาณ</dt><dd>${fmt(cover)} เดือน</dd>` : ""}<dt>หมายเหตุ</dt><dd>${esc(it.remark || "–")}</dd></dl><h3>ประวัติรับเข้า/ส่งออก</h3>`;
     if (!hist.length) h += `<p class="note">ยังไม่มีรายการรับเข้าหรือส่งออกของสินค้านี้</p>`;
     else {
-      h += `<div class="tbl"><table><thead><tr><th>วันที่</th><th>ลูกค้า / เอกสาร</th><th>แผนก</th><th class="n">ส่งออก</th><th class="n">รับเข้า</th><th>ผู้บันทึก</th><th></th></tr></thead><tbody>`;
+      h += `<div class="tbl"><table><thead><tr><th>วันที่</th><th>ลูกค้า / เอกสาร</th><th>แผนก</th><th class="n">ส่งออก</th><th class="n">รับเข้า</th><th>ผู้บันทึก</th>${mode === "staff" ? "<th></th>" : ""}</tr></thead><tbody>`;
       hist.forEach(e => {
-        h += `<tr><td>${esc(thDate(e.date))}</td><td class="w">${esc([e.customer, e.doc_no].filter(Boolean).join(" / ") || "–")}${e.note ? `<br><small>${esc(e.note)}</small>` : ""}</td><td>${esc(e.dept || "–")}</td><td class="n">${e.kind === "out" ? fmt(e.qty) : ""}</td><td class="n in">${e.kind === "in" ? fmt(e.qty) : ""}</td><td>${esc(staffNames[e.created_by] || (e.source === "sheet" ? "Google Sheet" : "–"))}</td><td><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบ</button></td></tr>`;
+        h += `<tr><td>${esc(thDate(e.date))}</td><td class="w">${esc([e.customer, e.doc_no].filter(Boolean).join(" / ") || "–")}${e.note ? `<br><small>${esc(e.note)}</small>` : ""}</td><td>${esc(e.dept || "–")}</td><td class="n">${e.kind === "out" ? fmt(e.qty) : ""}</td><td class="n in">${e.kind === "in" ? fmt(e.qty) : ""}</td><td>${esc(staffNames[e.created_by] || (e.source === "sheet" ? "Google Sheet" : "–"))}</td>${mode === "staff" ? `<td><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบ</button></td>` : ""}</tr>`;
       });
       h += `</tbody></table></div>`;
     }
@@ -463,7 +464,7 @@
     $("iTitle").textContent = e.model || e.code || "รายการ"; $("iSub").textContent = "รหัสนี้ไม่อยู่ในรายการสินค้า";
     $("iBody").innerHTML = `<dl class="meta"><dt>วันที่</dt><dd>${esc(thDate(e.date))}</dd><dt>รหัส</dt><dd>${esc(e.code || "–")}</dd><dt>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</dt><dd>${fmt(e.qty)} ชิ้น</dd><dt>ลูกค้า</dt><dd>${esc(e.customer || "–")}</dd><dt>เอกสาร</dt><dd>${esc(e.doc_no || "–")}</dd><dt>แผนก</dt><dd>${esc(e.dept || "–")}</dd></dl>
       <p class="note">รายการนี้ไม่ถูกนับเข้าสต็อกของสินค้าใด เพราะรหัสไม่ตรงกับรายการสินค้า</p>
-      <div class="btnrow"><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบรายการนี้</button></div>`;
+      ${mode === "staff" ? `<div class="btnrow"><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบรายการนี้</button></div>` : ""}`;
     openDlg($("dItem"));
   }
 

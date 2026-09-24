@@ -77,6 +77,8 @@ from auth.users where email = 'founder@example.com';
 7. ไปที่ **Edge Functions → Deploy a new function → Via Editor** ตั้งชื่อ `manage-users` แล้ววางโค้ดจาก `supabase/functions/manage-users/index.ts` และ Deploy จากนั้นปิด **Verify JWT with legacy secret** ใน Settings เพราะฟังก์ชันตรวจ JWT ผ่าน Supabase Auth เองและตรวจบทบาทใน `staff` ทุกครั้ง
 8. Foundator เข้าสู่ระบบเว็บ กด **บัญชี → จัดการผู้ใช้** เพื่อเชิญสมาชิกและเลือกสิทธิ์ ผู้รับคำเชิญเปิดลิงก์ในอีเมลแล้วตั้งรหัสผ่านในหน้าที่เว็บแสดง
 
+ก่อนเชิญสมาชิกนอกทีมผู้ดูแลโปรเจกต์ Supabase ให้ตั้งค่า **Authentication → Emails → SMTP Settings** ด้วยผู้ให้บริการส่งอีเมลของบริษัท Supabase จำกัดระบบส่งอีเมลค่าเริ่มต้นไว้สำหรับอีเมลสมาชิกองค์กรและไม่เหมาะกับการใช้งานจริง ตรวจทั้ง Auth logs และกล่องจดหมายผู้รับเมื่อทดสอบคำเชิญ เพราะบันทึก `mail.send` ไม่ยืนยันว่าอีเมลถึงปลายทางแล้ว
+
 การปิดใช้งานหรือเปลี่ยนสิทธิ์ทำได้ในหน้าเดียวกัน บัญชีที่ล็อกอินได้แต่ไม่อยู่ใน `staff` จะเห็นเหมือนผู้เยี่ยมชม อ่านรายละเอียดสิทธิ์ที่ [docs/user-access.md](docs/user-access.md)
 
 ### 5. ค่าเชื่อมต่อใน `config.js`

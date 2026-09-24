@@ -6,18 +6,30 @@
 -- ---------- ผู้มีสิทธิ์แก้ไข (staff) ----------
 create table if not exists public.staff (
   user_id     uuid primary key references auth.users(id) on delete cascade,
+  email       text not null,
   name        text not null default '',
+  role        text not null default 'editor' check (role in ('founder', 'editor', 'viewer')),
   is_admin    boolean not null default false,
   is_active   boolean not null default true,
   created_at  timestamptz not null default now()
 );
+create unique index if not exists staff_email_unique on public.staff (lower(email));
+create unique index if not exists staff_one_founder on public.staff ((true)) where role = 'founder';
 
--- true เมื่อผู้ใช้ที่ล็อกอินอยู่เป็น staff ที่ยังใช้งาน
+-- ผู้ใช้ที่แก้ไขสต็อกได้: Founder และ Editor ที่ยังใช้งาน
 create or replace function public.is_staff()
 returns boolean
 language sql stable security definer set search_path = public
 as $$
-  select exists (select 1 from public.staff s where s.user_id = auth.uid() and s.is_active);
+  select exists (select 1 from public.staff s where s.user_id = auth.uid() and s.is_active and s.role in ('founder', 'editor'));
+$$;
+
+-- บทบาทของบัญชีปัจจุบันเท่านั้น; NULL เมื่อไม่มีสิทธิ์หรือถูกปิดใช้งาน
+create or replace function public.my_role()
+returns text
+language sql stable security definer set search_path = public
+as $$
+  select s.role from public.staff s where s.user_id = auth.uid() and s.is_active;
 $$;
 
 -- ---------- สินค้า ----------
@@ -79,9 +91,10 @@ alter table public.staff     enable row level security;
 alter table public.items     enable row level security;
 alter table public.movements enable row level security;
 
--- staff: เห็นรายชื่อ staff ได้เฉพาะ staff (ใช้แสดงชื่อผู้บันทึก) ; เพิ่ม/แก้ staff ทำใน SQL Editor โดยผู้ดูแลเท่านั้น
+-- staff: ผู้แก้ไขเห็นรายชื่อเพื่อแสดงชื่อผู้บันทึก; Viewer เห็นเฉพาะตนเอง
+-- การเพิ่ม/แก้สิทธิ์ทำผ่าน Edge Function ที่ตรวจบทบาท Founder เท่านั้น
 drop policy if exists staff_read on public.staff;
-create policy staff_read on public.staff for select to authenticated using (public.is_staff());
+create policy staff_read on public.staff for select to authenticated using (public.is_staff() or user_id = auth.uid());
 
 -- items: staff อ่าน/เพิ่ม/แก้ได้ ; ไม่มีสิทธิ์ลบ (ใช้ active = false แทน)
 drop policy if exists items_read on public.items;
@@ -140,6 +153,8 @@ revoke all on function public.public_stock() from public;
 grant execute on function public.public_stock() to anon, authenticated;
 revoke all on function public.is_staff() from public;
 grant execute on function public.is_staff() to anon, authenticated;
+revoke all on function public.my_role() from public;
+grant execute on function public.my_role() to authenticated;
 
 -- สิทธิ์ระดับตาราง (RLS เป็นตัวกรองชั้นที่สอง)
 revoke all on public.staff, public.items, public.movements from anon;

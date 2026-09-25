@@ -30,6 +30,7 @@
 | `supabase/09_owner_admin_auditor.sql` | ย้ายผู้จัดการเป็นแอดมิน ฝ่ายขายเป็นผู้ตรวจสอบ และเพิ่มสิทธิ์เจ้าของ |
 | `supabase/10_role_permissions.sql` | สิทธิ์เฟส 1: จำกัดคลังให้ส่งออกอย่างเดียว เปิดชื่อผู้บันทึก และป้องกันบัญชีผู้ก่อตั้ง |
 | `supabase/11_usernames.sql` | เพิ่ม Username, RPC อ่าน Username ของตนเอง และ rate limit สำหรับ Username login |
+| `supabase/12_fix_stock_audit.sql` | แก้ audit trigger ให้บันทึกการเปลี่ยนแปลงสินค้าและ movements ได้ |
 | `supabase/reference_schema.sql` | schema รวมสำหรับติดตั้งใหม่เท่านั้น ห้ามรันบน Production ที่มีข้อมูล |
 | `supabase/functions/manage-users/index.ts` | Edge Function สำหรับจัดการผู้ใช้โดยผู้ก่อตั้งหรือเจ้าของ |
 | `supabase/functions/login-username/index.ts` | Edge Function สำหรับเข้าสู่ระบบด้วย Username โดยไม่เปิดเผยอีเมล |
@@ -87,7 +88,7 @@ from auth.users where email = 'founder@example.com';
 5. สำหรับฐานข้อมูลที่สร้างก่อนแก้สิทธิ์นี้ ให้รัน `supabase/05_manage_users_permissions.sql` ใน SQL Editor เพื่อให้ `service_role` เข้าถึง `staff` ได้; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
 6. สำหรับฐานข้อมูลเดิมที่เคยมีบทบาท `staff` ให้รัน `supabase/06_fix_role_constraint.sql` เพื่อให้รับบทบาท Editor / Viewer; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีข้อจำกัดที่ถูกต้องแล้ว
 7. สำหรับฐานข้อมูลที่สร้างก่อนสิทธิ์ Viewer แบบอ่านภายใน ให้รัน `supabase/07_viewer_read_access.sql`; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
-8. รัน `supabase/08_role_matrix_and_audit.sql`, `supabase/09_owner_admin_auditor.sql`, `supabase/10_role_permissions.sql` และ `supabase/11_usernames.sql` ตามลำดับ
+8. รัน `supabase/08_role_matrix_and_audit.sql`, `supabase/09_owner_admin_auditor.sql`, `supabase/10_role_permissions.sql`, `supabase/11_usernames.sql` และ `supabase/12_fix_stock_audit.sql` ตามลำดับ
 9. Deploy `manage-users` และ `login-username` จากโฟลเดอร์ `supabase/functions/` โดยปิด **Verify JWT with legacy secret** สำหรับทั้งสองฟังก์ชัน; `manage-users` ตรวจ JWT และบทบาทเอง ส่วน `login-username` ต้องรับคำขอก่อนล็อกอินและมี rate limit ที่ฐานข้อมูล
 10. ผู้ก่อตั้งหรือเจ้าของเข้าสู่ระบบเว็บ กด **บัญชี → จัดการผู้ใช้** เพื่อสร้างสมาชิก กำหนด Username สิทธิ์ และรหัสผ่านเริ่มต้น ไม่มีอีเมลเชิญ
 

@@ -750,7 +750,7 @@
     const eid = $("dConfirm").dataset.eid;
     if (!canDeleteEntry(entries.find(e => e.id === eid))) { $("kMsg").textContent = "บัญชีนี้ไม่มีสิทธิ์ลบรายการนี้"; return; }
     $("kOk").disabled = true;
-    const { error } = await sb.from("movements").update({ deleted_at: new Date().toISOString() }).eq("id", eid);
+    const { error } = await sb.rpc("soft_delete_movement", { p_movement_id: eid });
     $("kOk").disabled = false;
     if (error) { $("kMsg").textContent = dbErr(error); return; }
     $("dConfirm").close(); toast("ลบรายการแล้ว"); reload();

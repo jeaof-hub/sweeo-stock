@@ -31,6 +31,7 @@
 | `supabase/10_role_permissions.sql` | สิทธิ์เฟส 1: จำกัดคลังให้ส่งออกอย่างเดียว เปิดชื่อผู้บันทึก และป้องกันบัญชีผู้ก่อตั้ง |
 | `supabase/11_usernames.sql` | เพิ่ม Username, RPC อ่าน Username ของตนเอง และ rate limit สำหรับ Username login |
 | `supabase/12_fix_stock_audit.sql` | แก้ audit trigger ให้บันทึกการเปลี่ยนแปลงสินค้าและ movements ได้ |
+| `supabase/13_soft_delete_movement_rpc.sql` | ย้ายการลบ movements ไป RPC ที่ตรวจสิทธิ์และล็อกแถวแบบ atomic |
 | `supabase/reference_schema.sql` | schema รวมสำหรับติดตั้งใหม่เท่านั้น ห้ามรันบน Production ที่มีข้อมูล |
 | `supabase/functions/manage-users/index.ts` | Edge Function สำหรับจัดการผู้ใช้โดยผู้ก่อตั้งหรือเจ้าของ |
 | `supabase/functions/login-username/index.ts` | Edge Function สำหรับเข้าสู่ระบบด้วย Username โดยไม่เปิดเผยอีเมล |
@@ -88,7 +89,7 @@ from auth.users where email = 'founder@example.com';
 5. สำหรับฐานข้อมูลที่สร้างก่อนแก้สิทธิ์นี้ ให้รัน `supabase/05_manage_users_permissions.sql` ใน SQL Editor เพื่อให้ `service_role` เข้าถึง `staff` ได้; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
 6. สำหรับฐานข้อมูลเดิมที่เคยมีบทบาท `staff` ให้รัน `supabase/06_fix_role_constraint.sql` เพื่อให้รับบทบาท Editor / Viewer; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีข้อจำกัดที่ถูกต้องแล้ว
 7. สำหรับฐานข้อมูลที่สร้างก่อนสิทธิ์ Viewer แบบอ่านภายใน ให้รัน `supabase/07_viewer_read_access.sql`; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
-8. รัน `supabase/08_role_matrix_and_audit.sql`, `supabase/09_owner_admin_auditor.sql`, `supabase/10_role_permissions.sql`, `supabase/11_usernames.sql` และ `supabase/12_fix_stock_audit.sql` ตามลำดับ
+8. รัน migration `08` ถึง `13` ตามลำดับเลข โดย Production ที่ผ่าน migration ก่อนหน้าแล้วให้รันเฉพาะเลขที่ยังไม่ได้รัน
 9. Deploy `manage-users` และ `login-username` จากโฟลเดอร์ `supabase/functions/` โดยปิด **Verify JWT with legacy secret** สำหรับทั้งสองฟังก์ชัน; `manage-users` ตรวจ JWT และบทบาทเอง ส่วน `login-username` ต้องรับคำขอก่อนล็อกอินและมี rate limit ที่ฐานข้อมูล
 10. ผู้ก่อตั้งหรือเจ้าของเข้าสู่ระบบเว็บ กด **บัญชี → จัดการผู้ใช้** เพื่อสร้างสมาชิก กำหนด Username สิทธิ์ และรหัสผ่านเริ่มต้น ไม่มีอีเมลเชิญ
 
@@ -126,6 +127,7 @@ window.SWEEO_CONFIG = {
 - **สำรองข้อมูล**: แอดมิน เจ้าของ หรือผู้ก่อตั้งกด บัญชี → ส่งออก Excel อย่างน้อยสัปดาห์ละครั้ง (แผนฟรีของ Supabase ไม่มีสำรองข้อมูลอัตโนมัติให้ดาวน์โหลด)
 - **แผนฟรีของ Supabase จะหยุดโปรเจกต์ชั่วคราวถ้าไม่มีการใช้งาน 7 วัน** ถ้าหยุดแล้ว เข้า Dashboard แล้วกด Restore project
 - **แก้รายการที่บันทึกผิด**: ระบบไม่ให้แก้ตัวเลขย้อนหลัง ให้ลบรายการเดิม (ระบบเก็บประวัติการลบ) แล้วบันทึกใหม่
+- **การลบรายการ**: หน้าเว็บเรียก `soft_delete_movement()` ซึ่งตรวจสิทธิ์และล็อกแถวในฐานข้อมูล การอัปเดตตาราง `movements` ตรงจาก client ถูกปิด
 - **ยอดคงเหลือ** = ยอดยกมา + รับเข้า − ส่งออก (ไม่นับรายการที่ถูกลบ)
 - **ดูรายการที่ถูกลบ**: แอดมิน เจ้าของ และผู้ก่อตั้งใช้แท็บ **รายการที่ถูกลบ** บนเว็บ
 - **ดูบันทึกการเปลี่ยนแปลง**: เจ้าของและผู้ก่อตั้งใช้แท็บ **บันทึกการเปลี่ยนแปลง** บนเว็บ เริ่มเก็บข้อมูลตั้งแต่ติดตั้ง `08_role_matrix_and_audit.sql`

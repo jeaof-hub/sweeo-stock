@@ -362,6 +362,12 @@
     else if (s === "avgDesc") arr.sort((a, b) => (Number(b[1].avg_month) || 0) - (Number(a[1].avg_month) || 0));
     else if (s === "cover") arr.sort((a, b) => cover(a) - cover(b));
     else arr.sort((a, b) => (a[1].sort_order || 9e9) - (b[1].sort_order || 9e9));
+    // Use public balances alone for the stock-only gauge. A bar scaled by ROP
+    // would reveal the private reorder point even if its label were hidden.
+    const positiveBalances = [...calc.values()].map(c => c.bal).filter(n => n > 0).sort((a, b) => a - b);
+    const reference = positiveBalances[Math.floor((positiveBalances.length - 1) * .75)] || 1;
+    const unit = 10 ** Math.floor(Math.log10(reference));
+    const stockScale = [1, 2, 5, 10].map(n => n * unit).find(n => n >= reference) || reference;
     $("count").textContent = `แสดง ${fmt(arr.length)} จาก ${fmt(items.size)} รายการ`;
     const list = $("list");
     if (!items.size) { list.innerHTML = `<div class="state"><h2>ยังไม่มีข้อมูลสินค้า</h2><p>${canManageStock() ? "กดเพิ่มสินค้าใหม่ หรือนำเข้าข้อมูลตามคู่มือ" : "ยังไม่มีสินค้าที่แสดงได้"}</p></div>`; return; }
@@ -370,10 +376,13 @@
       const st = c.status ? `<span class="tag st-${c.status}">${statusLabel[c.status]}</span>` : "";
       let g = "";
       const rop = Number(it.rop) || 0;
-      if (mode !== "visitor" && rop) {
+      if (mode === "member" && rop) {
         const pct = Math.max(0, Math.min(1, c.bal / (rop * 2))) * 100;
         const col = c.status === "red" ? "var(--red)" : c.status === "amber" ? "var(--amber)" : "var(--green)";
         g = `<div class="gauge" aria-hidden="true"><div class="track"><div class="fill" style="width:${pct}%;background:${col}"></div><div class="rop"></div></div><div class="legend"><span>0</span><span>จุดสั่ง ${fmt(rop)}</span><span>${fmt(rop * 2)}+</span></div></div>`;
+      } else {
+        const pct = Math.max(0, Math.min(1, c.bal / stockScale)) * 100;
+        g = `<div class="gauge" aria-hidden="true"><div class="track"><div class="fill" style="width:${pct}%;background:var(--brand)"></div></div><div class="legend"><span>0</span><span>สเกลคงเหลือ ${fmt(stockScale)}+</span></div></div>`;
       }
       return `<button type="button" class="item" data-id="${esc(id)}"><div class="model">${esc(itemName(it))}</div>
         <div class="qty"><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b><small>คงเหลือ</small></div>

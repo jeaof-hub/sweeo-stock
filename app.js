@@ -1,8 +1,9 @@
 /* SWEEO Stock — GitHub Pages + Supabase
  * Visitor (ไม่ล็อกอิน): เห็นเฉพาะยอดคงเหลือผ่านฟังก์ชัน public_stock()
  * Auditor: อ่านรายละเอียดสต็อกและประวัติ
- * Warehouse: บันทึกส่งออก และลบรายการของตนเองในวันเดียวกัน (สิทธิ์ชั่วคราวถึง Phase 2)
- * Admin / Owner / Founder: จัดการสินค้า ปรับยอด ส่งออกข้อมูล และดูรายการที่ถูกลบ
+ * Warehouse: ส่งคำขอเบิกให้ Admin / Owner / Founder อนุมัติ
+ * Admin: ส่งคำขอเบิกให้ Owner / Founder อนุมัติ และอนุมัติคำขอของ Warehouse
+ * Owner / Founder: เบิกได้ทันทีและอนุมัติคำขอ พร้อมจัดการสินค้า ปรับยอด ส่งออกข้อมูล และดูรายการที่ถูกลบ
  */
 (function () {
   "use strict";
@@ -27,6 +28,7 @@
   let entries = [];                // movements (not deleted)
   let deletedEntries = [];         // admin / owner / founder deleted entries
   let stockChanges = [];           // founder / owner change log
+  let dispatchRequests = [], dispatchLines = [], pendingByItem = new Map();
   let moreStockChanges = false;
   let calc = new Map();            // id -> {inQ,out,bal,status}
   let staffNames = {};
@@ -38,7 +40,8 @@
   const canRecord = () => canDispatch() || canReceive();
   const canManageStock = () => ["founder", "owner", "admin"].includes(currentRole);
   const bangkokDate = value => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
-  const canDeleteEntry = e => !!e && (canManageStock() || (currentRole === "warehouse" && e.created_by === session?.user.id && bangkokDate(e.created_at) === bangkokDate(Date.now())));
+  const canDeleteEntry = e => !!e && canManageStock();
+  const canReviewDispatch = r => !!r && ((currentRole === "admin" && r.requester_role === "warehouse") || (["owner", "founder"].includes(currentRole) && ["warehouse", "admin"].includes(r.requester_role))) && r.requester_id !== session?.user.id;
   const recorderLabel = (uid, source) => staffNames[uid] || (source === "sheet" ? "Google Sheet" : uid === session?.user.id ? "คุณ" : "พนักงาน");
   // Supabase may remove the invite URL fragment while restoring the session.
   const authParams = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -121,12 +124,15 @@
     items = new Map(rows.map(r => [r.id, r])); entries = []; deletedEntries = []; stockChanges = []; moreStockChanges = false;
   }
   async function loadMember() {
-    const [its, mvs, audit, st, changes] = await Promise.all([
+    const [its, mvs, audit, st, changes, requests, requestLines, pendingTotals] = await Promise.all([
       fetchAll(() => sb.from("items").select("*").eq("active", true).order("id")),
       fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
       canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false })) : Promise.resolve([]),
       sb.rpc("staff_display_names"),
-      canManageUsers() ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201) : Promise.resolve({ data: [] })
+      canManageUsers() ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201) : Promise.resolve({ data: [] }),
+      sb.from("dispatch_requests").select("*").order("created_at", { ascending: false }),
+      sb.from("dispatch_request_lines").select("*").order("item_id"),
+      sb.rpc("dispatch_pending_totals")
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
@@ -135,6 +141,9 @@
     stockChanges = (changes.data || []).slice(0, 200);
     moreStockChanges = (changes.data || []).length > 200;
     staffNames = {}; (st.data || []).forEach(s => staffNames[s.user_id] = s.name);
+    if (requests.error) throw requests.error; if (requestLines.error) throw requestLines.error; if (pendingTotals.error) throw pendingTotals.error;
+    dispatchRequests = requests.data || []; dispatchLines = (requestLines.data || []).map(l => ({ ...l, requested_qty: Number(l.requested_qty), approved_qty: l.approved_qty == null ? null : Number(l.approved_qty) }));
+    pendingByItem = new Map((pendingTotals.data || []).map(r => [r.item_id, Number(r.pending_qty)]));
   }
   async function reload() {
     if (loading) return; loading = true;
@@ -153,6 +162,8 @@
     channel = sb.channel("stock-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "movements" }, scheduleReload)
       .on("postgres_changes", { event: "*", schema: "public", table: "items" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_requests" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_request_lines" }, scheduleReload)
       .subscribe();
   }
   function unsubscribe() { if (channel) { sb.removeChannel(channel); channel = null; } }
@@ -185,6 +196,9 @@
     $("outBtn").hidden = !canDispatch(); $("inBtn").hidden = !canReceive();
     $("tabAudit").hidden = !canManageStock();
     $("tabChanges").hidden = !canManageUsers();
+    $("tabPending").hidden = !["admin", "owner", "founder"].includes(currentRole);
+    $("tabMine").hidden = !["warehouse", "admin"].includes(currentRole);
+    $("outBtn").textContent = ["warehouse", "admin"].includes(currentRole) ? "ส่งคำขอเบิก" : "บันทึกส่งออก";
     $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
     $("manageUsersBtn").hidden = !canManageUsers();
     document.querySelectorAll("[data-member]").forEach(o => { o.hidden = !isMember; o.disabled = !isMember; });
@@ -200,7 +214,7 @@
       openDlg($("dPw"));
     }
     if (!isMember || !canManageStock() && !$("viewAudit").hidden || !canManageUsers() && !$("viewChanges").hidden) setTab("stock");
-    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; moreStockChanges = false; statusFilter = "";
+    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; dispatchRequests = []; dispatchLines = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
     if (isMember) subscribe(); else unsubscribe();
@@ -463,13 +477,51 @@
     $("tabLog").setAttribute("aria-selected", String(which === "log"));
     $("tabAudit").setAttribute("aria-selected", String(which === "audit"));
     $("tabChanges").setAttribute("aria-selected", String(which === "changes"));
-    $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes";
+    $("tabPending").setAttribute("aria-selected", String(which === "pending")); $("tabMine").setAttribute("aria-selected", String(which === "mine"));
+    $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes"; $("viewPending").hidden = which !== "pending"; $("viewMine").hidden = which !== "mine";
     if (which === "log") renderLog();
     if (which === "audit") renderAudit();
     if (which === "changes") renderChangeLog();
+    if (which === "pending" || which === "mine") renderDispatchRequests(which);
   }
   $("tabStock").onclick = () => setTab("stock"); $("tabLog").onclick = () => setTab("log"); $("tabAudit").onclick = () => { if (canManageStock()) setTab("audit"); };
   $("tabChanges").onclick = () => { if (canManageUsers()) setTab("changes"); };
+  $("tabPending").onclick = () => setTab("pending"); $("tabMine").onclick = () => setTab("mine");
+
+  const requestStatusLabel = { pending: "รออนุมัติ", approved: "อนุมัติแล้ว", rejected: "ปฏิเสธแล้ว", cancelled: "ยกเลิก" };
+  function requestLines(id) { return dispatchLines.filter(l => l.request_id === id); }
+  function renderDispatchRequests(which) {
+    const rows = which === "pending" ? dispatchRequests.filter(r => r.status === "pending" && canReviewDispatch(r)) : dispatchRequests.filter(r => r.requester_id === session?.user.id);
+    const target = which === "pending" ? $("pendingList") : $("mineList"), count = which === "pending" ? $("pendingCount") : $("mineCount");
+    count.textContent = `${fmt(rows.length)} คำขอ`;
+    target.innerHTML = rows.length ? `<div class="requests">${rows.map(r => {
+      const lines = requestLines(r.id); const review = which === "pending" && canReviewDispatch(r);
+      return `<article class="request-card" data-request="${esc(r.id)}"><div class="request-head"><div><b>${esc(r.customer || "ไม่ระบุลูกค้า")}</b><small>${esc(r.doc_no || "ไม่มีเลขเอกสาร")} · ${esc(thDate(r.document_date))} · ${esc(staffNames[r.requester_id] || "พนักงาน")}</small></div><span class="tag">${requestStatusLabel[r.status] || r.status}</span></div>
+      <div class="request-lines">${lines.map(l => `<label><span>${esc(itemName(items.get(l.item_id)))} <small>ขอ ${fmt(l.requested_qty)}</small></span>${review ? `<input class="approve-qty" data-line="${esc(l.id)}" type="number" min="0.001" step="0.001" value="${esc(l.requested_qty)}">` : `<b>${fmt(l.approved_qty ?? l.requested_qty)}</b>`}</label>`).join("")}</div>
+      ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}${r.rejection_reason ? `<p class="msg">เหตุผล: ${esc(r.rejection_reason)}</p>` : ""}
+      <div class="btnrow">${review ? '<button class="btn primary sm" data-request-action="approve">อนุมัติ</button><button class="btn danger sm" data-request-action="reject">ปฏิเสธ</button>' : ""}${which === "mine" && r.status === "pending" ? '<button class="btn sm" data-request-action="edit">แก้ไข</button><button class="btn danger sm" data-request-action="cancel">ยกเลิกคำขอ</button>' : ""}</div></article>`;
+    }).join("")}</div>` : '<div class="state"><h2>ไม่มีคำขอ</h2></div>';
+  }
+
+  async function dispatchAction(button) {
+    const card = button.closest("[data-request]"), id = card.dataset.request, action = button.dataset.requestAction;
+    button.disabled = true;
+    try {
+      if (action === "approve") {
+        const lines = [...card.querySelectorAll(".approve-qty")].map(i => ({ line_id: i.dataset.line, qty: Number(i.value) }));
+        if (lines.some(l => !(l.qty > 0))) throw new Error("จำนวนอนุมัติต้องมากกว่า 0");
+        const { error } = await sb.rpc("approve_dispatch_request", { p_request_id: id, p_lines: lines }); if (error) throw error;
+      } else if (action === "reject") {
+        const reason = window.prompt("ระบุเหตุผลที่ปฏิเสธ"); if (reason === null) return;
+        const { error } = await sb.rpc("reject_dispatch_request", { p_request_id: id, p_reason: reason }); if (error) throw error;
+      } else if (action === "cancel") {
+        if (!window.confirm("ยกเลิกคำขอนี้?")) return;
+        const { error } = await sb.rpc("cancel_dispatch_request", { p_request_id: id }); if (error) throw error;
+      } else if (action === "edit") { openRequestEdit(id); return; }
+      toast("บันทึกคำขอแล้ว"); await reload();
+    } catch (error) { toast(dbErr(error)); } finally { button.disabled = false; }
+  }
+  $("pendingList").onclick = e => { const b=e.target.closest("[data-request-action]"); if(b) dispatchAction(b); }; $("mineList").onclick = e => { const b=e.target.closest("[data-request-action]"); if(b) dispatchAction(b); };
 
   function renderAudit() {
     if (!canManageStock()) return;
@@ -521,9 +573,13 @@
       fillDatalist($("saleList"), recent(sorted.map(e => e.sale)));
     }
     renderAlerts(); renderList();
+    const pendingCount = dispatchRequests.filter(r => r.status === "pending" && canReviewDispatch(r)).length;
+    $("pendingBadge").textContent = pendingCount ? `(${pendingCount})` : "";
     if (!$("viewLog").hidden) renderLog();
     if (!$("viewAudit").hidden) renderAudit();
     if (!$("viewChanges").hidden) renderChangeLog();
+    if (!$("viewPending").hidden) renderDispatchRequests("pending");
+    if (!$("viewMine").hidden) renderDispatchRequests("mine");
     if ($("dItem").open && $("dItem").dataset.id && items.has($("dItem").dataset.id)) openItem($("dItem").dataset.id);
   }
 
@@ -543,7 +599,7 @@
     const avg = Number(it.avg_month), rop = Number(it.rop) || 0;
     const cover = avg > 0 ? c.bal / avg : null;
     let h = `<div class="flow"><div><small>ยอดยกมา</small><b>${fmt(Number(it.opening))}</b></div><div><small>รับเข้า</small><b>${fmt(c.inQ)}</b></div><div><small>ส่งออก</small><b>${fmt(c.out)}</b></div><div class="bal"><small>คงเหลือ</small><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b></div></div>
-      ${canRecord() || canManageStock() ? `<div class="btnrow">${canDispatch() ? '<button class="btn primary sm" type="button" data-act="out">ส่งออกรายการนี้</button>' : ""}${canReceive() ? '<button class="btn sm" type="button" data-act="in">รับเข้า</button>' : ""}${canManageStock() ? '<button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button>' : ""}</div>` : ""}
+      ${canRecord() || canManageStock() ? `<div class="btnrow">${canDispatch() ? `<button class="btn primary sm" type="button" data-act="out">${["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิกรายการนี้" : "เบิกรายการนี้"}</button>` : ""}${canReceive() ? '<button class="btn sm" type="button" data-act="in">รับเข้า</button>' : ""}${canManageStock() ? '<button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button>' : ""}</div>` : ""}
       <dl class="meta"><dt>รหัสสินค้า</dt><dd>${esc(it.code || "–")}</dd><dt>ประเภท</dt><dd>${esc(it.type)}</dd><dt>แผนก</dt><dd>${esc(it.dept)}</dd><dt>ที่เก็บ</dt><dd>${esc(it.loc || "–")}</dd>
       ${it.avg_month != null ? `<dt>ขายเฉลี่ยต่อเดือน</dt><dd>${fmt(avg)} ชิ้น</dd>` : ""}${rop ? `<dt>จุดสั่งผลิต</dt><dd>${fmt(rop)} ชิ้น${c.status ? " (" + statusLabel[c.status] + ")" : ""}</dd>` : ""}
       ${cover !== null ? `<dt>พอขายอีกประมาณ</dt><dd>${fmt(cover)} เดือน</dd>` : ""}<dt>หมายเหตุ</dt><dd>${esc(it.remark || "–")}</dd></dl><h3>ประวัติรับเข้า/ส่งออก</h3>`;
@@ -597,8 +653,9 @@
     const id = line.dataset.item, sel = line.querySelector(".sel");
     if (!id) { sel.innerHTML = ""; return; }
     const it = items.get(id), c = calc.get(id), q = Number(line.querySelector(".qtyin").value) || 0;
-    let t = `${esc(it.code || "")} คงเหลือ <b>${fmt(c.bal)}</b>`;
-    if (formKind === "out" && q > 0) t += q > c.bal ? `  <span class="warn">ส่งออกเกินยอดคงเหลือ</span>` : `  หลังส่งออก <b>${fmt(c.bal - q)}</b>`;
+    const available = c.bal - (pendingByItem.get(id) || 0);
+    let t = `${esc(it.code || "")} คงเหลือ <b>${fmt(c.bal)}</b>${formKind === "out" ? ` · พร้อมเบิก <b>${fmt(available)}</b>` : ""}`;
+    if (formKind === "out" && q > 0) t += q > available ? `  <span class="warn">ขอเกินยอดพร้อมเบิก</span>` : `  หลังอนุมัติ <b>${fmt(available - q)}</b>`;
     if (formKind === "in" && q > 0) t += `  หลังรับเข้า <b>${fmt(c.bal + q)}</b>`;
     sel.innerHTML = t;
   }
@@ -631,13 +688,14 @@
   function openEntryForm(kind, itemId) {
     if ((kind === "out" && !canDispatch()) || (kind === "in" && !canReceive())) return;
     formKind = kind;
-    $("eTitle").textContent = kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า";
-    $("eSub").textContent = kind === "out" ? "ตัดสต็อกตามใบส่งของ ใส่ได้หลายรายการในเอกสารเดียว" : "เพิ่มสต็อกจากการรับสินค้าเข้าคลัง";
+    delete $("dEntry").dataset.requestId;
+    $("eTitle").textContent = kind === "out" ? (["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิก" : "บันทึกส่งออก") : "บันทึกรับเข้า";
+    $("eSub").textContent = kind === "out" ? (["warehouse","admin"].includes(currentRole) ? "คำขอจะถูกส่งไปรอผู้มีสิทธิ์อนุมัติ" : "รายการจะตัดยอดทันที") : "เพิ่มสต็อกจากการรับสินค้าเข้าคลัง";
     $("eCustL").textContent = kind === "out" ? "ลูกค้า" : "รับจาก / แหล่งที่มา";
     $("eInvL").textContent = kind === "out" ? "เลขที่ INV / เอกสาร" : "เลขที่เอกสารรับเข้า";
     $("eDate").value = today(); $("eInv").value = ""; $("eNote").value = ""; $("eDept").value = ""; $("eMsg").textContent = "";
     $("eCust").value = kind === "in" ? "STOCK IN" : "";
-    $("eSave").textContent = kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า";
+    $("eSave").textContent = kind === "out" ? (["warehouse","admin"].includes(currentRole) ? "ส่งคำขอ" : "ยืนยันเบิกและตัดยอด") : "บันทึกรับเข้า";
     $("eLines").innerHTML = ""; addLine(itemId);
     openDlg($("dEntry"));
     setTimeout(() => { const i = $("eLines").querySelector(itemId ? ".qtyin" : ".picker input"); if (i) i.focus(); }, 50);
@@ -662,11 +720,23 @@
     }
     if (!rows.length) { msg.textContent = "เพิ่มสินค้าอย่างน้อยหนึ่งรายการ"; return; }
     $("eSave").disabled = true;
-    const { error } = await sb.from("movements").insert(rows);
+    let error;
+    if (formKind === "out") {
+      const args = { p_document_date: date, p_customer: $("eCust").value.trim(), p_doc_no: $("eInv").value.trim(), p_dept: $("eDept").value.trim(), p_sale: $("eSale").value.trim(), p_note: $("eNote").value.trim(), p_lines: rows.map(r => ({ item_id: r.item_id, qty: r.qty })) };
+      const requestId = $("dEntry").dataset.requestId;
+      ({ error } = requestId ? await sb.rpc("update_dispatch_request", { p_request_id: requestId, ...args }) : await sb.rpc("create_dispatch_request", args));
+    } else ({ error } = await sb.from("movements").insert(rows));
     $("eSave").disabled = false;
     if (error) { msg.textContent = dbErr(error); return; }
-    $("dEntry").close(); toast(`${formKind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า"}แล้ว ${rows.length} รายการ`); reload();
+    $("dEntry").close(); toast(formKind === "out" && ["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิกแล้ว" : `${formKind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า"}แล้ว ${rows.length} รายการ`); reload();
   };
+
+  function openRequestEdit(id) {
+    const r=dispatchRequests.find(x=>x.id===id); if(!r || r.status!=="pending" || r.requester_id!==session?.user.id) return;
+    openEntryForm("out"); $("dEntry").dataset.requestId=id; $("eTitle").textContent="แก้ไขคำขอเบิก"; $("eSave").textContent="บันทึกคำขอ";
+    $("eDate").value=String(r.document_date).slice(0,10); $("eCust").value=r.customer||""; $("eInv").value=r.doc_no||""; $("eDept").value=r.dept||""; $("eSale").value=r.sale||""; $("eNote").value=r.note||""; $("eLines").innerHTML="";
+    requestLines(id).forEach(l=>{const line=addLine(l.item_id); line.querySelector(".qtyin").value=l.requested_qty; updateLineInfo(line);});
+  }
 
   /* ---------- count adjust ---------- */
   function openCount(id) {

@@ -38,6 +38,8 @@
     <div class="tabs" role="tablist" id="tabs" hidden>
       <button class="tab" role="tab" id="tabStock" aria-selected="true" type="button">สต็อก</button>
       <button class="tab" role="tab" id="tabLog" aria-selected="false" type="button">ประวัติรับเข้า/ส่งออก</button>
+      <button class="tab" role="tab" id="tabPending" aria-selected="false" type="button" hidden>รออนุมัติ <span id="pendingBadge"></span></button>
+      <button class="tab" role="tab" id="tabMine" aria-selected="false" type="button" hidden>คำขอของฉัน</button>
       <button class="tab" role="tab" id="tabAudit" aria-selected="false" type="button" hidden>รายการที่ถูกลบ</button>
       <button class="tab" role="tab" id="tabChanges" aria-selected="false" type="button" hidden>บันทึกการเปลี่ยนแปลง</button>
     </div>
@@ -83,6 +85,9 @@
     <div id="auditList"></div>
   </section>
 
+  <section id="viewPending" hidden><div class="count"><span id="pendingCount"></span></div><div id="pendingList"></div></section>
+  <section id="viewMine" hidden><div class="count"><span id="mineCount"></span></div><div id="mineList"></div></section>
+
   <section id="viewChanges" hidden>
     <div class="count"><span id="changesCount"></span></div>
     <div id="changesList"></div>
@@ -90,7 +95,7 @@
 </div>
 
 <div class="actions" id="actions" hidden><div class="in">
-  <button class="btn primary" type="button" id="outBtn">บันทึกส่งออก</button>
+  <button class="btn primary" type="button" id="outBtn">เบิกสินค้า</button>
   <button class="btn" type="button" id="inBtn">บันทึกรับเข้า</button>
 </div></div>
 
@@ -215,6 +220,6 @@
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
 <script src="i18n.js?v=username-login-1"></script>
-<script src="app.js?v=soft-delete-rpc-1"></script>
+<script src="app.js?v=dispatch-requests-1"></script>
 </body>
 </html>

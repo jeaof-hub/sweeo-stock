@@ -195,3 +195,10 @@ td.w{white-space:normal;min-width:150px}
 .user-controls label{display:flex;flex-direction:column;gap:3px;font-size:.78rem;color:var(--muted)}
 .user-controls select,.user-controls input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-size:.85rem}
 .user-controls input{width:160px}
+.requests{display:grid;gap:12px;padding:4px 0 20px}
+.request-card{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--surface)}
+.request-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}
+.request-head b,.request-head small{display:block}.request-head small{color:var(--muted);margin-top:3px}
+.request-lines{display:grid;gap:6px}.request-lines label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
+.request-lines label:last-child{border-bottom:none}.request-lines small{color:var(--muted)}
+.approve-qty{width:110px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-align:right}

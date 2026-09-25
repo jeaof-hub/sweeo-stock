@@ -22,6 +22,8 @@ test("approved delivery note uses approved quantity and creates original plus co
   assert.equal((html.match(/class="item-row(?: blank-row)?"/g)||[]).length,20);
   assert.equal((html.match(/class="item-row blank-row"/g)||[]).length,18);
   assert.match(html,/ต้นฉบับ/); assert.match(html,/สำเนา/); assert.match(html,/TD-20260925-00001/);
+  assert.match(html,/LASTER TECH \(THAILAND\) CO\., LTD\./);
+  assert.doesNotMatch(html,/SWEEO TECHNOLOGY CO\., LTD\./);
   assert.match(html,/footer\{position:absolute;[^}]*bottom:2mm/);
 });
 

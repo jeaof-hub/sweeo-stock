@@ -11,11 +11,11 @@ begin
     perform public.create_dispatch_request(current_date,'TEST','TEST-NULL','','','',null);
     raise exception 'null lines accepted';
   exception when others then if sqlerrm='null lines accepted' then raise; end if; end;
-  req:=public.create_dispatch_request(current_date,'TEST','TEST-WH','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',0.001)));
+  req:=public.create_dispatch_request(current_date,'TEST','TEST-WH','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1)));
   select status into state from public.dispatch_requests where id=req;
   if state<>'pending' or exists(select 1 from public.movements where dispatch_request_id=req) then raise exception 'warehouse request was not pending'; end if;
   begin
-    insert into public.movements(item_id,code,model,date,kind,qty,source) values('r439','TEST','TEST',current_date,'out',0.001,'app');
+    insert into public.movements(item_id,code,model,date,kind,qty,source) values('r439','TEST','TEST',current_date,'out',1,'app');
     raise exception 'warehouse direct dispatch succeeded';
   exception when insufficient_privilege then null;
   end;
@@ -25,11 +25,45 @@ begin
 end $$;
 rollback;
 
+-- Quantities must be positive whole units, and approval may not exceed the request.
+begin;
+create temp table phase2_roles as select role,user_id from public.staff where is_active; grant select on phase2_roles to authenticated;
+select set_config('request.jwt.claim.sub',(select user_id::text from phase2_roles where role='warehouse'),true); set local role authenticated;
+do $$
+declare req uuid; line_id uuid;
+begin
+  begin
+    perform public.create_dispatch_request(current_date,'TEST','TEST-CREATE-DECIMAL','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1.5)));
+    raise exception 'decimal create succeeded';
+  exception when others then if sqlerrm='decimal create succeeded' then raise; end if; end;
+
+  req:=public.create_dispatch_request(current_date,'TEST','TEST-INTEGER-RULES','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',2)));
+  select id into line_id from public.dispatch_request_lines where request_id=req;
+  begin
+    perform public.update_dispatch_request(req,current_date,'TEST','TEST-UPDATE-DECIMAL','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1.5)));
+    raise exception 'decimal update succeeded';
+  exception when others then if sqlerrm='decimal update succeeded' then raise; end if; end;
+
+  perform set_config('request.jwt.claim.sub',(select user_id::text from phase2_roles where role='admin'),true);
+  begin
+    perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',1.5)));
+    raise exception 'decimal approval succeeded';
+  exception when others then if sqlerrm='decimal approval succeeded' then raise; end if; end;
+  begin
+    perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',3)));
+    raise exception 'over-request approval succeeded';
+  exception when check_violation then null; end;
+
+  perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',1)));
+  if not exists(select 1 from public.movements where dispatch_request_id=req and qty=1) then raise exception 'whole-unit reduced approval failed'; end if;
+end $$;
+rollback;
+
 -- Accounts without a dispatch role cannot create requests.
 begin;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true); set local role authenticated;
 do $$ begin
-  begin perform public.create_dispatch_request(current_date,'TEST','TEST-NOSTAFF','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',0.001))); raise exception 'non-member request succeeded';
+  begin perform public.create_dispatch_request(current_date,'TEST','TEST-NOSTAFF','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1))); raise exception 'non-member request succeeded';
   exception when insufficient_privilege then null; end;
 end $$;
 rollback;
@@ -39,7 +73,7 @@ create temp table phase2_auditor as select user_id from public.staff where role=
 select set_config('request.jwt.claim.sub',(select user_id::text from phase2_auditor),true); set local role authenticated;
 do $$ begin
   if exists(select 1 from phase2_auditor) then
-    begin perform public.create_dispatch_request(current_date,'TEST','TEST-AUDITOR','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',0.001))); raise exception 'auditor request succeeded';
+    begin perform public.create_dispatch_request(current_date,'TEST','TEST-AUDITOR','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1))); raise exception 'auditor request succeeded';
     exception when insufficient_privilege then null; end;
   end if;
 end $$;
@@ -53,34 +87,34 @@ do $$
 declare req uuid; line_id uuid;
 begin
   begin
-    insert into public.movements(item_id,code,model,date,kind,qty,source) values('r439','TEST','TEST',current_date,'out',0.001,'app');
+    insert into public.movements(item_id,code,model,date,kind,qty,source) values('r439','TEST','TEST',current_date,'out',1,'app');
     raise exception 'admin direct dispatch succeeded';
   exception when insufficient_privilege then null;
   end;
-  insert into public.movements(item_id,code,model,date,kind,qty,source) values('r439','TEST','TEST',current_date,'in',0.001,'app');
-  req:=public.create_dispatch_request(current_date,'TEST','TEST-ADMIN','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',0.001)));
+  insert into public.movements(item_id,code,model,date,kind,qty,source) values('r439','TEST','TEST',current_date,'in',1,'app');
+  req:=public.create_dispatch_request(current_date,'TEST','TEST-ADMIN','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1)));
   select id into line_id from public.dispatch_request_lines where request_id=req;
   begin
-    perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',0.002)));
+    perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',2)));
     raise exception 'admin approved own request';
   exception when insufficient_privilege then null;
   end;
 end $$;
 rollback;
 
--- Admin may approve a Warehouse request and increase its quantity.
+-- Admin may approve a Warehouse request and decrease its quantity.
 begin;
 create temp table phase2_roles as select role,user_id from public.staff where is_active; grant select on phase2_roles to authenticated;
 select set_config('request.jwt.claim.sub',(select user_id::text from phase2_roles where role='warehouse'),true); set local role authenticated;
 do $$
 declare req uuid; line_id uuid; state text;
 begin
-  req:=public.create_dispatch_request(current_date,'TEST','TEST-ADMIN-APPROVE','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',0.001)));
+  req:=public.create_dispatch_request(current_date,'TEST','TEST-ADMIN-APPROVE','','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',2)));
   select id into line_id from public.dispatch_request_lines where request_id=req;
   perform set_config('request.jwt.claim.sub',(select user_id::text from phase2_roles where role='admin'),true);
-  perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',0.002)));
+  perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',1)));
   select status into state from public.dispatch_requests where id=req;
-  if state<>'approved' or not exists(select 1 from public.movements where dispatch_request_id=req and qty=0.002) then raise exception 'admin approval failed'; end if;
+  if state<>'approved' or not exists(select 1 from public.movements where dispatch_request_id=req and qty=1) then raise exception 'admin approval failed'; end if;
 end $$;
 rollback;
 
@@ -93,11 +127,11 @@ declare req uuid; line_id uuid; direct_req uuid; reviewer text;
 begin
   foreach reviewer in array array['owner','founder'] loop
     perform set_config('request.jwt.claim.sub',(select user_id::text from phase2_roles where role='admin'),true);
-    req:=public.create_dispatch_request(current_date,'TEST','TEST-'||reviewer,'','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',0.001)));
+    req:=public.create_dispatch_request(current_date,'TEST','TEST-'||reviewer,'','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1)));
     select id into line_id from public.dispatch_request_lines where request_id=req;
     perform set_config('request.jwt.claim.sub',(select user_id::text from phase2_roles where role=reviewer),true);
-    perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',0.001)));
-    direct_req:=public.create_dispatch_request(current_date,'TEST','DIRECT-'||reviewer,'','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',0.001)));
+    perform public.approve_dispatch_request(req,jsonb_build_array(jsonb_build_object('line_id',line_id,'qty',1)));
+    direct_req:=public.create_dispatch_request(current_date,'TEST','DIRECT-'||reviewer,'','','',jsonb_build_array(jsonb_build_object('item_id','r439','qty',1)));
     if (select status from public.dispatch_requests where id=direct_req)<>'approved' or not exists(select 1 from public.movements where dispatch_request_id=direct_req) then raise exception '% immediate request failed',reviewer; end if;
   end loop;
 end $$;

@@ -497,7 +497,7 @@
     target.innerHTML = rows.length ? `<div class="requests">${rows.map(r => {
       const lines = requestLines(r.id); const review = which === "pending" && canReviewDispatch(r);
       return `<article class="request-card" data-request="${esc(r.id)}"><div class="request-head"><div><b>${esc(r.customer || "ไม่ระบุลูกค้า")}</b><small>${esc(r.doc_no || "ไม่มีเลขเอกสาร")} · ${esc(thDate(r.document_date))} · ${esc(staffNames[r.requester_id] || "พนักงาน")}</small></div><span class="tag">${requestStatusLabel[r.status] || r.status}</span></div>
-      <div class="request-lines">${lines.map(l => `<label><span>${esc(itemName(items.get(l.item_id)))} <small>ขอ ${fmt(l.requested_qty)}</small></span>${review ? `<input class="approve-qty" data-line="${esc(l.id)}" type="number" min="0.001" step="0.001" value="${esc(l.requested_qty)}">` : `<b>${fmt(l.approved_qty ?? l.requested_qty)}</b>`}</label>`).join("")}</div>
+      <div class="request-lines">${lines.map(l => `<label><span>${esc(itemName(items.get(l.item_id)))} <small>ขอ ${fmt(l.requested_qty)}</small></span>${review ? `<input class="approve-qty" data-line="${esc(l.id)}" data-requested="${esc(l.requested_qty)}" type="number" min="1" max="${esc(l.requested_qty)}" step="1" value="${esc(l.requested_qty)}">` : `<b>${fmt(l.approved_qty ?? l.requested_qty)}</b>`}</label>`).join("")}</div>
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}${r.rejection_reason ? `<p class="msg">เหตุผล: ${esc(r.rejection_reason)}</p>` : ""}
       <div class="btnrow">${review ? '<button class="btn primary sm" data-request-action="approve">อนุมัติ</button><button class="btn danger sm" data-request-action="reject">ปฏิเสธ</button>' : ""}${which === "mine" && r.status === "pending" ? '<button class="btn sm" data-request-action="edit">แก้ไข</button><button class="btn danger sm" data-request-action="cancel">ยกเลิกคำขอ</button>' : ""}</div></article>`;
     }).join("")}</div>` : '<div class="state"><h2>ไม่มีคำขอ</h2></div>';
@@ -508,8 +508,9 @@
     button.disabled = true;
     try {
       if (action === "approve") {
-        const lines = [...card.querySelectorAll(".approve-qty")].map(i => ({ line_id: i.dataset.line, qty: Number(i.value) }));
-        if (lines.some(l => !(l.qty > 0))) throw new Error("จำนวนอนุมัติต้องมากกว่า 0");
+        const inputs = [...card.querySelectorAll(".approve-qty")];
+        const lines = inputs.map(i => ({ line_id: i.dataset.line, qty: Number(i.value) }));
+        if (inputs.some((i, index) => !Number.isInteger(lines[index].qty) || lines[index].qty < 1 || lines[index].qty > Number(i.dataset.requested))) throw new Error("จำนวนอนุมัติต้องเป็นจำนวนเต็มและไม่เกินจำนวนที่ขอ");
         const { error } = await sb.rpc("approve_dispatch_request", { p_request_id: id, p_lines: lines }); if (error) throw error;
       } else if (action === "reject") {
         const reason = window.prompt("ระบุเหตุผลที่ปฏิเสธ"); if (reason === null) return;

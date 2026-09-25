@@ -194,11 +194,11 @@
     $("roleBadge").classList.toggle("founder", canManageUsers());
     $("tabs").hidden = !isMember; $("actions").hidden = !canRecord(); $("newItemBtn").hidden = !canManageStock();
     $("outBtn").hidden = !canDispatch(); $("inBtn").hidden = !canReceive();
-    $("tabAudit").hidden = !canManageStock();
-    $("tabChanges").hidden = !canManageUsers();
+    $("tabAudit").hidden = true; $("tabChanges").hidden = true;
+    $("auditMenuBtn").hidden = !canManageStock(); $("changesMenuBtn").hidden = !canManageUsers();
     $("tabPending").hidden = !["admin", "owner", "founder"].includes(currentRole);
     $("tabMine").hidden = !["warehouse", "admin"].includes(currentRole);
-    $("outBtn").textContent = ["warehouse", "admin"].includes(currentRole) ? "ส่งคำขอเบิก" : "บันทึกส่งออก";
+    $("outBtn").textContent = currentRole === "warehouse" ? "ขอเบิก" : "เบิกสินค้า";
     $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
     $("manageUsersBtn").hidden = !canManageUsers();
     document.querySelectorAll("[data-member]").forEach(o => { o.hidden = !isMember; o.disabled = !isMember; });
@@ -229,7 +229,7 @@
       if (identity.includes("@")) {
         const { error } = await sb.auth.signInWithPassword({ email: identity, password });
         if (error) throw error;
-      } else {
+      } else if (mode === "visitor") {
         const response = await fetch(`${cfg.SUPABASE_URL}/functions/v1/login-username`, {
           method: "POST",
           headers: { "Content-Type": "application/json", apikey: cfg.SUPABASE_ANON_KEY },
@@ -248,6 +248,8 @@
   $("menuBtn").onclick = () => { const p = $("menuPop"); p.hidden = !p.hidden; $("menuBtn").setAttribute("aria-expanded", String(!p.hidden)); };
   document.addEventListener("click", e => { if (!e.target.closest("#userMenu")) { $("menuPop").hidden = true; $("menuBtn").setAttribute("aria-expanded", "false"); } });
   $("logoutBtn").onclick = async () => { $("menuPop").hidden = true; await sb.auth.signOut(); toast("ออกจากระบบแล้ว"); };
+  $("auditMenuBtn").onclick = () => { $("menuPop").hidden = true; if (canManageStock()) setTab("audit"); };
+  $("changesMenuBtn").onclick = () => { $("menuPop").hidden = true; if (canManageUsers()) setTab("changes"); };
   $("pwBtn").onclick = () => { $("menuPop").hidden = true; $("pwTitle").textContent = "เปลี่ยนรหัสผ่าน"; $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = ""; openDlg($("dPw")); };
   $("pwForm").addEventListener("submit", async e => {
     e.preventDefault();
@@ -415,15 +417,15 @@
     const list = $("list");
     if (!items.size) { list.innerHTML = `<div class="state"><h2>ยังไม่มีข้อมูลสินค้า</h2><p>${canManageStock() ? "กดเพิ่มสินค้าใหม่ หรือนำเข้าข้อมูลตามคู่มือ" : "ยังไม่มีสินค้าที่แสดงได้"}</p></div>`; return; }
     if (!arr.length) { list.innerHTML = `<div class="state"><h2>ไม่พบรายการที่ตรงกับเงื่อนไข</h2><p>ลองลบคำค้นหา เปลี่ยนประเภท หรือยกเลิกตัวกรองด้านบน</p></div>`; return; }
-    list.innerHTML = arr.slice(0, 300).map(([id, it, c]) => {
+    list.innerHTML = `<div class="stock-table-head"><span>สินค้า</span><span>รหัสสินค้า</span><span>${mode === "visitor" ? "ประเภท" : "ที่เก็บ"}</span><span>พอขาย</span><span>คงเหลือ</span></div>` + arr.slice(0, 300).map(([id, it, c]) => {
       const st = c.status ? `<span class="tag st-${c.status}">${statusLabel[c.status]}</span>` : "";
       let g = "";
       const rop = Number(it.rop) || 0;
-      if (mode === "member" && rop) {
-        const pct = Math.max(0, Math.min(1, c.bal / (rop * 2))) * 100;
-        const col = c.status === "red" ? "var(--red)" : c.status === "amber" ? "var(--amber)" : "var(--green)";
-        const trackColor = c.bal <= 0 ? "var(--red-soft)" : "var(--track)";
-        g = `<div class="gauge" aria-hidden="true"><div class="track" style="background:${trackColor}"><div class="fill" style="width:${pct}%;background:${col}"></div><div class="rop"></div></div><div class="legend"><span>0</span><span>จุดสั่ง ${fmt(rop)}</span><span>${fmt(rop * 2)}+</span></div></div>`;
+      const avg = Number(it.avg_month) || 0, months = avg > 0 ? c.bal / avg : null;
+      if (mode === "member" && rop && ["red", "amber"].includes(c.status)) {
+        const pct = Math.max(0, Math.min(100, months == null ? 0 : months / 3 * 100));
+        const col = c.status === "red" ? "var(--red)" : "var(--amber)";
+        g = `<div class="gauge"><div class="track"><div class="fill" style="width:${pct}%;background:${col}"></div></div><div class="legend"><span>พอขายอีก ${months == null ? "–" : fmt(months)} เดือน</span><span>${statusLabel[c.status]}</span></div></div>`;
       } else {
         const pct = Math.max(0, Math.min(1, c.bal / stockScale)) * 100;
         // These colors compare public balances with the public display scale,
@@ -432,15 +434,23 @@
         const trackColor = c.bal <= 0 ? "var(--red-soft)" : "var(--track)";
         g = `<div class="gauge" aria-hidden="true"><div class="track" style="background:${trackColor}"><div class="fill" style="width:${pct}%;background:${stockColor}"></div></div><div class="legend"><span>0</span><span>สเกลคงเหลือ ${fmt(stockScale)}+</span></div></div>`;
       }
+      const coverText = mode === "member" && months != null ? `พอขายอีก ${fmt(months)} เดือน` : "–";
       return `<button type="button" class="item" data-id="${esc(id)}"><div class="model">${esc(itemName(it))}</div>
         <div class="qty"><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b><small>คงเหลือ</small></div>
         <div class="spec">${esc(it.model ? it.spec : "")}</div>
-        <div class="tags">${st}<span class="tag">${esc(it.type)}</span><span class="tag">${esc(it.dept)}</span>${mode !== "visitor" && it.loc ? `<span class="tag">ที่เก็บ ${esc(it.loc)}</span>` : ""}${it.code ? `<span class="tag">${esc(it.code)}</span>` : ""}</div>${g}</button>`;
+        <div class="table-cell code">${esc(it.code || "–")}</div><div class="table-cell location">${mode !== "visitor" ? esc(it.loc || "–") : esc(it.type || "–")}</div><div class="table-cell cover-cell">${esc(coverText)}</div>
+        <div class="tags">${st}<span class="tag">${esc(it.type)}</span><span class="tag">${esc(it.dept)}</span>${mode !== "visitor" && it.loc ? `<span class="tag">ที่เก็บ ${esc(it.loc)}</span>` : ""}${it.code ? `<span class="tag">${esc(it.code)}</span>` : ""}</div>${mode === "member" && months != null && !g ? `<div class="cover-note">${esc(coverText)}</div>` : ""}${g}</button>`;
     }).join("") + (arr.length > 300 ? `<p class="count">แสดง 300 รายการแรก พิมพ์คำค้นหาเพื่อกรองให้แคบลง</p>` : "");
   }
   $("list").addEventListener("click", e => { const b = e.target.closest(".item"); if (b) openItem(b.dataset.id); });
   let st; $("q").addEventListener("input", () => { clearTimeout(st); st = setTimeout(renderList, 120); });
   ["fType", "fDept", "fSort", "fZero"].forEach(id => $(id).addEventListener("change", renderList));
+  const setViewMode = table => { $("list").classList.toggle("table-mode", table); $("viewModeBtn").textContent = table ? "มุมมองการ์ด" : "มุมมองตาราง"; localStorage.setItem("sweeo-stock-view", table ? "table" : "cards"); };
+  setViewMode(localStorage.getItem("sweeo-stock-view") !== "cards");
+  $("viewModeBtn").onclick = () => setViewMode(!$("list").classList.contains("table-mode"));
+  function toggleFilters(button, panel) { const open = !panel.classList.contains("open"); panel.classList.toggle("open", open); button.setAttribute("aria-expanded", String(open)); }
+  $("stockFilterBtn").onclick = () => toggleFilters($("stockFilterBtn"), $("stockFilters"));
+  $("logFilterBtn").onclick = () => toggleFilters($("logFilterBtn"), $("logFilters"));
 
   /* ---------- log view (staff) ---------- */
   function renderLog() {
@@ -458,16 +468,16 @@
     let tin = 0, tout = 0; arr.forEach(e => e.kind === "in" ? tin += e.qty : tout += e.qty);
     $("lcount").textContent = `${fmt(arr.length)} รายการ  ส่งออกรวม ${fmt(tout)} ชิ้น  รับเข้ารวม ${fmt(tin)} ชิ้น`;
     if (!arr.length) { $("log").innerHTML = `<div class="state"><h2>ไม่มีรายการในช่วงนี้</h2><p>เปลี่ยนเดือนหรือตัวกรองด้านบน</p></div>`; return; }
-    let html = `<div class="log">`, lastDay;
+    const groups = new Map();
     arr.slice(0, 500).forEach(e => {
-      if (e.date !== lastDay) { html += `<div class="day">${e.date ? esc(thDate(e.date)) : "ไม่ระบุวันที่"}</div>`; lastDay = e.date; }
-      const it = items.get(e.item_id);
-      const sub = [e.customer, e.doc_no, e.dept, recorderLabel(e.created_by, e.source)].filter(Boolean).join("  |  ");
-      html += `<button type="button" class="row" data-eid="${esc(e.id)}"><div class="m">${esc(it ? itemName(it) : (e.model || e.code || "(ไม่ทราบรุ่น)"))}</div>
-        <div class="q ${e.kind}">${e.kind === "in" ? "+" : "−"}${fmt(e.qty)}<small>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</small></div>
-        <div class="s">${esc(sub || "–")}</div></button>`;
+      const key = e.doc_no ? `${e.doc_no}|${e.kind}` : `entry:${e.id}`;
+      if (!groups.has(key)) groups.set(key, []); groups.get(key).push(e);
     });
-    $("log").innerHTML = html + `</div>`;
+    $("log").innerHTML = `<div class="log-groups">${[...groups.values()].map(group => {
+      const first = group[0], total = group.reduce((sum, e) => sum + e.qty, 0);
+      const title = first.doc_no || first.customer || (first.kind === "in" ? "รับเข้า" : "ส่งออก");
+      return `<article class="log-card"><div class="log-card-head"><div><b>${esc(title)}</b><small>${first.date ? esc(thDate(first.date)) : "ไม่ระบุวันที่"} · ${esc(first.customer || "–")} · ${esc(first.dept || "–")}</small></div><div class="log-card-total">${first.kind === "in" ? "+" : "−"}${fmt(total)}<small>${fmt(group.length)} รายการ</small></div></div>${group.map(e => { const it=items.get(e.item_id); return `<button type="button" class="row" data-eid="${esc(e.id)}"><div class="m">${esc(it ? itemName(it) : (e.model || e.code || "(ไม่ทราบรุ่น)"))}</div><div class="q ${e.kind}">${e.kind === "in" ? "+" : "−"}${fmt(e.qty)}</div><div class="s">${esc(recorderLabel(e.created_by,e.source))}</div></button>`; }).join("")}</article>`;
+    }).join("")}</div>`;
   }
   $("log").addEventListener("click", e => { const r = e.target.closest(".row"); if (r) openEntry(r.dataset.eid); });
   ["lMonth", "lKind", "lDept"].forEach(id => $(id).addEventListener("change", () => { if (id === "lMonth") $("lMonth").dataset.touched = "1"; renderLog(); }));
@@ -606,9 +616,9 @@
       ${cover !== null ? `<dt>พอขายอีกประมาณ</dt><dd>${fmt(cover)} เดือน</dd>` : ""}<dt>หมายเหตุ</dt><dd>${esc(it.remark || "–")}</dd></dl><h3>ประวัติรับเข้า/ส่งออก</h3>`;
     if (!hist.length) h += `<p class="note">ยังไม่มีรายการรับเข้าหรือส่งออกของสินค้านี้</p>`;
     else {
-      h += `<div class="tbl"><table><thead><tr><th>วันที่</th><th>ลูกค้า / เอกสาร</th><th>แผนก</th><th class="n">ส่งออก</th><th class="n">รับเข้า</th><th>ผู้บันทึก</th>${canRecord() ? "<th></th>" : ""}</tr></thead><tbody>`;
+      h += `<div class="tbl"><table><thead><tr><th>วันที่</th><th>ลูกค้า / เอกสาร</th><th>แผนก</th><th class="n">ส่งออก</th><th class="n">รับเข้า</th><th>ผู้บันทึก</th></tr></thead><tbody>`;
       hist.forEach(e => {
-        h += `<tr><td>${esc(thDate(e.date))}</td><td class="w">${esc([e.customer, e.doc_no].filter(Boolean).join(" / ") || "–")}${e.note ? `<br><small>${esc(e.note)}</small>` : ""}</td><td>${esc(e.dept || "–")}</td><td class="n">${e.kind === "out" ? fmt(e.qty) : ""}</td><td class="n in">${e.kind === "in" ? fmt(e.qty) : ""}</td><td>${esc(recorderLabel(e.created_by, e.source))}</td>${canRecord() ? `<td>${canDeleteEntry(e) ? `<button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบ</button>` : ""}</td>` : ""}</tr>`;
+        h += `<tr><td>${esc(thDate(e.date))}</td><td class="w">${esc([e.customer, e.doc_no].filter(Boolean).join(" / ") || "–")}${e.note ? `<br><small>${esc(e.note)}</small>` : ""}</td><td>${esc(e.dept || "–")}</td><td class="n">${e.kind === "out" ? fmt(e.qty) : ""}</td><td class="n in">${e.kind === "in" ? fmt(e.qty) : ""}</td><td>${esc(recorderLabel(e.created_by, e.source))}</td></tr>`;
       });
       h += `</tbody></table></div>`;
     }
@@ -626,11 +636,11 @@
   });
   function openEntry(eid) {
     const e = entries.find(x => x.id === eid); if (!e) return;
-    if (e.item_id && items.has(e.item_id)) { openItem(e.item_id); return; }
     $("dItem").dataset.id = "";
-    $("iTitle").textContent = e.model || e.code || "รายการ"; $("iSub").textContent = "รหัสนี้ไม่อยู่ในรายการสินค้า";
+    const linked = e.item_id && items.has(e.item_id), it = linked ? items.get(e.item_id) : null;
+    $("iTitle").textContent = it ? itemName(it) : (e.model || e.code || "รายการ"); $("iSub").textContent = e.kind === "in" ? "รายละเอียดรับเข้า" : "รายละเอียดส่งออก";
     $("iBody").innerHTML = `<dl class="meta"><dt>วันที่</dt><dd>${esc(thDate(e.date))}</dd><dt>รหัส</dt><dd>${esc(e.code || "–")}</dd><dt>${e.kind === "in" ? "รับเข้า" : "ส่งออก"}</dt><dd>${fmt(e.qty)} ชิ้น</dd><dt>ลูกค้า</dt><dd>${esc(e.customer || "–")}</dd><dt>เอกสาร</dt><dd>${esc(e.doc_no || "–")}</dd><dt>แผนก</dt><dd>${esc(e.dept || "–")}</dd></dl>
-      <p class="note">รายการนี้ไม่ถูกนับเข้าสต็อกของสินค้าใด เพราะรหัสไม่ตรงกับรายการสินค้า</p>
+      ${linked ? "" : '<p class="note">รายการนี้ไม่ถูกนับเข้าสต็อกของสินค้าใด เพราะรหัสไม่ตรงกับรายการสินค้า</p>'}
       ${canDeleteEntry(e) ? `<div class="btnrow"><button class="btn sm danger" type="button" data-del="${esc(e.id)}">ลบรายการนี้</button></div>` : ""}`;
     openDlg($("dItem"));
   }
@@ -689,6 +699,7 @@
   function openEntryForm(kind, itemId) {
     if ((kind === "out" && !canDispatch()) || (kind === "in" && !canReceive())) return;
     formKind = kind;
+    entryDraft = null;
     delete $("dEntry").dataset.requestId;
     $("eTitle").textContent = kind === "out" ? (["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิก" : "บันทึกส่งออก") : "บันทึกรับเข้า";
     $("eSub").textContent = kind === "out" ? (["warehouse","admin"].includes(currentRole) ? "คำขอจะถูกส่งไปรอผู้มีสิทธิ์อนุมัติ" : "รายการจะตัดยอดทันที") : "เพิ่มสต็อกจากการรับสินค้าเข้าคลัง";
@@ -696,7 +707,7 @@
     $("eInvL").textContent = kind === "out" ? "เลขที่ INV / เอกสาร" : "เลขที่เอกสารรับเข้า";
     $("eDate").value = today(); $("eInv").value = ""; $("eNote").value = ""; $("eDept").value = ""; $("eMsg").textContent = "";
     $("eCust").value = kind === "in" ? "STOCK IN" : "";
-    $("eSave").textContent = kind === "out" ? (["warehouse","admin"].includes(currentRole) ? "ส่งคำขอ" : "ยืนยันเบิกและตัดยอด") : "บันทึกรับเข้า";
+    $("eSave").textContent = "ตรวจสอบรายการ"; $("eMore").open = false;
     $("eLines").innerHTML = ""; addLine(itemId);
     openDlg($("dEntry"));
     setTimeout(() => { const i = $("eLines").querySelector(itemId ? ".qtyin" : ".picker input"); if (i) i.focus(); }, 50);
@@ -704,37 +715,50 @@
   $("addLine").onclick = () => addLine().querySelector(".picker input").focus();
   $("outBtn").onclick = () => openEntryForm("out");
   $("inBtn").onclick = () => openEntryForm("in");
-  $("eSave").onclick = async () => {
+  let entryDraft = null;
+  function collectEntryDraft() {
     if ((formKind === "out" && !canDispatch()) || (formKind === "in" && !canReceive())) return;
     const date = $("eDate").value, msg = $("eMsg"); msg.textContent = "";
-    if (!date) { msg.textContent = "ใส่วันที่ก่อนบันทึก"; return; }
+    if (!date) { msg.textContent = "ใส่วันที่ก่อนบันทึก"; return null; }
     const rows = [];
     for (const l of $("eLines").children) {
       const id = l.dataset.item, q = Number(l.querySelector(".qtyin").value), typed = l.querySelector(".picker input").value.trim();
       if (!id && !typed && !q) continue;
-      if (!id) { msg.textContent = "เลือกสินค้าจากรายการที่ค้นหาให้ครบทุกบรรทัด"; return; }
-      if (!(q > 0) || !Number.isFinite(q)) { msg.textContent = "ใส่จำนวนที่มากกว่า 0 ให้ครบทุกบรรทัด"; return; }
+      if (!id) { msg.textContent = "เลือกสินค้าจากรายการที่ค้นหาให้ครบทุกบรรทัด"; return null; }
+      if (!Number.isInteger(q) || q < 1) { msg.textContent = "ใส่จำนวนเต็มที่มากกว่า 0 ให้ครบทุกบรรทัด"; return null; }
       const it = items.get(id);
       rows.push({ item_id: id, code: it.code || "", model: it.model || "", date, kind: formKind, qty: q,
         customer: $("eCust").value.trim(), doc_no: $("eInv").value.trim(), dept: $("eDept").value.trim(),
         sale: $("eSale").value.trim(), note: $("eNote").value.trim(), source: "app", created_by: session.user.id });
     }
-    if (!rows.length) { msg.textContent = "เพิ่มสินค้าอย่างน้อยหนึ่งรายการ"; return; }
-    $("eSave").disabled = true;
+    if (!rows.length) { msg.textContent = "เพิ่มสินค้าอย่างน้อยหนึ่งรายการ"; return null; }
+    return { rows, date, kind: formKind, requestId: $("dEntry").dataset.requestId || "" };
+  }
+  $("eSave").onclick = () => {
+    entryDraft = collectEntryDraft(); if (!entryDraft) return;
+    const waits = entryDraft.kind === "out" && ["warehouse","admin"].includes(currentRole);
+    $("erMode").textContent = waits ? "รายการนี้จะส่งไปรออนุมัติ และยังไม่ตัดยอด" : "รายการนี้จะตัดยอดสต็อกทันที";
+    $("erBody").innerHTML = `<div class="review-mode">${esc($("erMode").textContent)}</div><div class="review-lines">${entryDraft.rows.map(r => `<div class="review-line"><span>${esc(itemName(items.get(r.item_id)))}</span><b>${fmt(r.qty)} ชิ้น</b></div>`).join("")}</div><dl class="meta"><dt>วันที่</dt><dd>${esc(thDate(entryDraft.date))}</dd><dt>เอกสาร</dt><dd>${esc($("eInv").value.trim() || "–")}</dd><dt>ลูกค้า</dt><dd>${esc($("eCust").value.trim() || "–")}</dd></dl>`;
+    $("erMsg").textContent = ""; $("dEntry").close(); openDlg($("dEntryReview"));
+  };
+  $("erBack").onclick = () => { $("dEntryReview").close(); openDlg($("dEntry")); };
+  $("erConfirm").onclick = async () => {
+    if (!entryDraft) return;
+    $("erConfirm").disabled = true;
     let error;
-    if (formKind === "out") {
-      const args = { p_document_date: date, p_customer: $("eCust").value.trim(), p_doc_no: $("eInv").value.trim(), p_dept: $("eDept").value.trim(), p_sale: $("eSale").value.trim(), p_note: $("eNote").value.trim(), p_lines: rows.map(r => ({ item_id: r.item_id, qty: r.qty })) };
-      const requestId = $("dEntry").dataset.requestId;
+    if (entryDraft.kind === "out") {
+      const args = { p_document_date: entryDraft.date, p_customer: $("eCust").value.trim(), p_doc_no: $("eInv").value.trim(), p_dept: $("eDept").value.trim(), p_sale: $("eSale").value.trim(), p_note: $("eNote").value.trim(), p_lines: entryDraft.rows.map(r => ({ item_id: r.item_id, qty: r.qty })) };
+      const requestId = entryDraft.requestId;
       ({ error } = requestId ? await sb.rpc("update_dispatch_request", { p_request_id: requestId, ...args }) : await sb.rpc("create_dispatch_request", args));
-    } else ({ error } = await sb.from("movements").insert(rows));
-    $("eSave").disabled = false;
-    if (error) { msg.textContent = dbErr(error); return; }
-    $("dEntry").close(); toast(formKind === "out" && ["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิกแล้ว" : `${formKind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า"}แล้ว ${rows.length} รายการ`); reload();
+    } else ({ error } = await sb.from("movements").insert(entryDraft.rows));
+    $("erConfirm").disabled = false;
+    if (error) { $("erMsg").textContent = dbErr(error); return; }
+    const saved = entryDraft; entryDraft = null; $("dEntryReview").close(); toast(saved.kind === "out" && ["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิกแล้ว" : `${saved.kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า"}แล้ว ${saved.rows.length} รายการ`); reload();
   };
 
   function openRequestEdit(id) {
     const r=dispatchRequests.find(x=>x.id===id); if(!r || r.status!=="pending" || r.requester_id!==session?.user.id) return;
-    openEntryForm("out"); $("dEntry").dataset.requestId=id; $("eTitle").textContent="แก้ไขคำขอเบิก"; $("eSave").textContent="บันทึกคำขอ";
+    openEntryForm("out"); $("dEntry").dataset.requestId=id; $("eTitle").textContent="แก้ไขคำขอเบิก"; $("eSave").textContent="ตรวจสอบรายการ"; $("eMore").open=true;
     $("eDate").value=String(r.document_date).slice(0,10); $("eCust").value=r.customer||""; $("eInv").value=r.doc_no||""; $("eDept").value=r.dept||""; $("eSale").value=r.sale||""; $("eNote").value=r.note||""; $("eLines").innerHTML="";
     requestLines(id).forEach(l=>{const line=addLine(l.item_id); line.querySelector(".qtyin").value=l.requested_qty; updateLineInfo(line);});
   }

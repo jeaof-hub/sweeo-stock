@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=i18n-1">
+<link rel="stylesheet" href="style.css?v=phase-3-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -29,6 +29,8 @@
             <div class="me" id="meEmail"></div>
             <button type="button" id="exportBtn" hidden>ส่งออก Excel</button>
             <button type="button" id="manageUsersBtn" hidden>จัดการผู้ใช้</button>
+            <button type="button" id="auditMenuBtn" hidden>รายการที่ถูกลบ</button>
+            <button type="button" id="changesMenuBtn" hidden>บันทึกการเปลี่ยนแปลง</button>
             <button type="button" id="pwBtn">เปลี่ยนรหัสผ่าน</button>
             <button type="button" id="logoutBtn">ออกจากระบบ</button>
           </div>
@@ -52,7 +54,8 @@
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="ค้นหารุ่น รหัสสินค้า หรือสเปก" autocomplete="off" aria-label="ค้นหาสินค้า"></div>
     <div class="alerts" id="alerts" role="group" aria-label="สถานะสต็อก" hidden></div>
-    <div class="filters">
+    <button class="btn filter-toggle" id="stockFilterBtn" type="button" aria-expanded="false">ตัวกรอง</button>
+    <div class="filters" id="stockFilters">
       <select id="fType" aria-label="ประเภทสินค้า"><option value="">ทุกประเภท</option></select>
       <select id="fDept" aria-label="แผนก"><option value="">ทุกแผนก</option></select>
       <select id="fSort" aria-label="เรียงลำดับ">
@@ -64,14 +67,15 @@
       </select>
       <label class="chk"><input type="checkbox" id="fZero" checked> ซ่อนรายการที่คงเหลือ 0</label>
     </div>
-    <div class="count"><span id="count"></span><button class="btn sm" id="newItemBtn" type="button" hidden>เพิ่มสินค้าใหม่</button></div>
+    <div class="count"><span id="count"></span><div class="count-actions"><button class="btn sm desktop-only" id="viewModeBtn" type="button">มุมมองตาราง</button><button class="btn sm" id="newItemBtn" type="button" hidden>เพิ่มสินค้าใหม่</button></div></div>
     <main class="list" id="list" aria-live="polite"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></main>
   </section>
 
   <section id="viewLog" hidden>
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="lq" type="search" placeholder="ค้นหาลูกค้า เลขเอกสาร หรือรุ่น" autocomplete="off" aria-label="ค้นหาประวัติ"></div>
-    <div class="filters">
+    <button class="btn filter-toggle" id="logFilterBtn" type="button" aria-expanded="false">ตัวกรอง</button>
+    <div class="filters" id="logFilters">
       <select id="lMonth" aria-label="เดือน"></select>
       <select id="lKind" aria-label="ประเภทรายการ"><option value="">รับเข้าและส่งออก</option><option value="out">เฉพาะส่งออก</option><option value="in">เฉพาะรับเข้า</option></select>
       <select id="lDept" aria-label="แผนก"><option value="">ทุกแผนก</option></select>
@@ -81,6 +85,7 @@
   </section>
 
   <section id="viewAudit" hidden>
+    <h2 class="view-title">รายการที่ถูกลบ</h2>
     <div class="count"><span id="auditCount"></span></div>
     <div id="auditList"></div>
   </section>
@@ -89,6 +94,7 @@
   <section id="viewMine" hidden><div class="count"><span id="mineCount"></span></div><div id="mineList"></div></section>
 
   <section id="viewChanges" hidden>
+    <h2 class="view-title">บันทึกการเปลี่ยนแปลง</h2>
     <div class="count"><span id="changesCount"></span></div>
     <div id="changesList"></div>
   </section>
@@ -164,6 +170,10 @@
 <dialog id="dEntry" aria-labelledby="eTitle"><div class="dlg">
   <div class="dlg-head"><div><h2 id="eTitle"></h2><p id="eSub"></p></div><button class="btn x" type="button" data-close>ยกเลิก</button></div>
   <div class="dlg-body">
+    <div class="lines" id="eLines"></div>
+    <button class="btn" type="button" id="addLine" style="margin-top:10px">เพิ่มสินค้าอีกรายการ</button>
+    <details class="more-fields" id="eMore">
+      <summary>รายละเอียดเอกสาร</summary>
     <div class="grid">
       <div class="f"><label for="eDate">วันที่</label><input type="date" id="eDate" required></div>
       <div class="f"><label for="eInv" id="eInvL">เลขที่ INV / เอกสาร</label><input id="eInv" autocomplete="off"></div>
@@ -172,10 +182,15 @@
       <div class="f"><label for="eSale">เซลส์</label><input id="eSale" list="saleList" autocomplete="off"></div>
       <div class="f full"><label for="eNote">หมายเหตุ</label><input id="eNote" autocomplete="off"></div>
     </div>
-    <div class="lines" id="eLines"></div>
-    <button class="btn" type="button" id="addLine" style="margin-top:10px">เพิ่มสินค้าอีกรายการ</button>
+    </details>
   </div>
-  <div class="dlg-foot"><span class="msg" id="eMsg"></span><button class="btn primary" type="button" id="eSave">บันทึก</button></div>
+  <div class="dlg-foot"><span class="msg" id="eMsg"></span><button class="btn primary" type="button" id="eSave">ตรวจสอบรายการ</button></div>
+</div></dialog>
+
+<dialog id="dEntryReview" aria-labelledby="erTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="erTitle">ตรวจสอบก่อนยืนยัน</h2><p id="erMode"></p></div><button class="btn x" type="button" id="erBack">กลับไปแก้ไข</button></div>
+  <div class="dlg-body" id="erBody"></div>
+  <div class="dlg-foot"><span class="msg" id="erMsg"></span><button class="btn primary" type="button" id="erConfirm">ยืนยัน</button></div>
 </div></dialog>
 
 <dialog id="dCount" aria-labelledby="cTitle"><div class="dlg">
@@ -219,7 +234,7 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="i18n.js?v=dispatch-integer-quantities-1"></script>
-<script src="app.js?v=dispatch-integer-quantities-1"></script>
+<script src="i18n.js?v=phase-3-1"></script>
+<script src="app.js?v=phase-3-1"></script>
 </body>
 </html>

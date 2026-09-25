@@ -23,6 +23,9 @@ const validEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.le
 const validRole = role => ["auditor", "warehouse", "admin", "owner"].includes(role);
 const validUuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const validPassword = value => typeof value === "string" && value.length >= 8 && value.length <= 128;
+const normalizeUsername = value => typeof value === "string" ? value.trim().toLowerCase() : "";
+const validUsername = value => /^[a-z0-9][a-z0-9._-]{1,30}[a-z0-9]$/.test(value);
+const userFields = "user_id,email,username,name,role,is_active,created_at";
 
 Deno.serve(async request => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
@@ -54,7 +57,7 @@ Deno.serve(async request => {
   if (!input || typeof input !== "object" || Array.isArray(input)) return reply({ error: "ข้อมูลคำขอไม่ถูกต้อง" }, 400);
 
   if (input.action === "list") {
-    let query = admin.from("staff").select("user_id,email,name,role,is_active,created_at");
+    let query = admin.from("staff").select(userFields);
     if (actor.role === "owner") query = query.neq("role", "founder");
     const { data, error } = await query.order("created_at", { ascending: true });
     if (error) {
@@ -66,9 +69,10 @@ Deno.serve(async request => {
 
   if (input.action === "create") {
     const email = typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+    const username = normalizeUsername(input.username);
     const name = typeof input.name === "string" ? input.name.trim() : "";
-    if (!validEmail(email) || !name || name.length > 100 || !validRole(input.role) || !validPassword(input.password)) {
-      return reply({ error: "ตรวจอีเมล ชื่อ สิทธิ์ และรหัสผ่าน (8–128 ตัวอักษร)" }, 400);
+    if (!validEmail(email) || !validUsername(username) || !name || name.length > 100 || !validRole(input.role) || !validPassword(input.password)) {
+      return reply({ error: "ตรวจชื่อผู้ใช้ อีเมล ชื่อ สิทธิ์ และรหัสผ่าน (8–128 ตัวอักษร)" }, 400);
     }
     const { data: existing, error: lookupError } = await admin.from("staff")
       .select("user_id").eq("email", email).maybeSingle();
@@ -77,6 +81,13 @@ Deno.serve(async request => {
       return reply({ error: "ตรวจบัญชีเดิมไม่สำเร็จ" }, 500);
     }
     if (existing) return reply({ error: "อีเมลนี้มีบัญชีในทีมแล้ว" }, 409);
+    const { data: existingUsername, error: usernameLookupError } = await admin.from("staff")
+      .select("user_id").eq("username", username).maybeSingle();
+    if (usernameLookupError) {
+      console.error("staff username lookup failed", usernameLookupError);
+      return reply({ error: "ตรวจชื่อผู้ใช้เดิมไม่สำเร็จ" }, 500);
+    }
+    if (existingUsername) return reply({ error: "ชื่อผู้ใช้นี้มีบัญชีแล้ว" }, 409);
 
     const { data: createdAuth, error: createError } = await admin.auth.admin.createUser({
       email, password: input.password, email_confirm: true, user_metadata: { name },
@@ -86,8 +97,8 @@ Deno.serve(async request => {
       return reply({ error: "สร้างบัญชีไม่สำเร็จ อาจมีอีเมลนี้อยู่ในระบบแล้ว" }, 409);
     }
     const { data: created, error: insertError } = await admin.from("staff")
-      .insert({ user_id: createdAuth.user.id, email, name, role: input.role, is_active: true, is_admin: false })
-      .select("user_id,email,name,role,is_active,created_at").single();
+      .insert({ user_id: createdAuth.user.id, email, username, name, role: input.role, is_active: true, is_admin: false })
+      .select(userFields).single();
     if (insertError) {
       console.error("auth user created but staff insert failed", insertError);
       const { error: cleanupError } = await admin.auth.admin.deleteUser(createdAuth.user.id);
@@ -95,7 +106,7 @@ Deno.serve(async request => {
         console.error("created auth user cleanup failed", cleanupError);
         return reply({ error: "สร้างบัญชีไม่สมบูรณ์ ติดต่อผู้ดูแลฐานข้อมูล" }, 500);
       }
-      return reply({ error: "สร้างบัญชีไม่สำเร็จ กรุณาลองอีกครั้ง" }, 500);
+      return reply({ error: insertError.code === "23505" ? "อีเมลหรือชื่อผู้ใช้นี้มีบัญชีแล้ว" : "สร้างบัญชีไม่สำเร็จ กรุณาลองอีกครั้ง" }, insertError.code === "23505" ? 409 : 500);
     }
     return reply({ user: created }, 201);
   }
@@ -146,13 +157,18 @@ Deno.serve(async request => {
       if (!name || name.length > 100) return reply({ error: "ชื่อไม่ถูกต้อง" }, 400);
       patch.name = name;
     }
+    if (Object.hasOwn(input, "username")) {
+      const username = normalizeUsername(input.username);
+      if (!validUsername(username)) return reply({ error: "ชื่อผู้ใช้ต้องมี 3–32 ตัว และใช้ a-z, 0-9, จุด, ขีด หรือขีดล่าง" }, 400);
+      patch.username = username;
+    }
     if (!Object.keys(patch).length) return reply({ error: "ไม่มีข้อมูลที่ต้องบันทึก" }, 400);
     const { data: updated, error: updateError } = await admin.from("staff")
       .update(patch).eq("user_id", target.user_id)
-      .select("user_id,email,name,role,is_active,created_at").single();
+      .select(userFields).single();
     if (updateError) {
       console.error("update staff failed", updateError);
-      return reply({ error: "บันทึกสิทธิ์ไม่สำเร็จ" }, 500);
+      return reply({ error: updateError.code === "23505" ? "ชื่อผู้ใช้นี้มีบัญชีแล้ว" : "บันทึกสิทธิ์ไม่สำเร็จ" }, updateError.code === "23505" ? 409 : 500);
     }
     return reply({ user: updated });
   }

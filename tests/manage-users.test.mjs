@@ -7,9 +7,9 @@ const source = readFileSync(new URL("../supabase/functions/manage-users/index.ts
 
 function makeFunction() {
   const staff = [
-    { user_id: "c8ca56f6-28a1-4854-be30-fb99e3e26887", email: "founder@example.com", name: "Founder", role: "founder", is_active: true, created_at: "2026-09-24" },
-    { user_id: "11111111-1111-4111-8111-111111111111", email: "warehouse@example.com", name: "Warehouse", role: "warehouse", is_active: true, created_at: "2026-09-24" },
-    { user_id: "33333333-3333-4333-8333-333333333333", email: "owner@example.com", name: "Owner", role: "owner", is_active: true, created_at: "2026-09-24" },
+    { user_id: "c8ca56f6-28a1-4854-be30-fb99e3e26887", email: "founder@example.com", username: "founder", name: "Founder", role: "founder", is_active: true, created_at: "2026-09-24" },
+    { user_id: "11111111-1111-4111-8111-111111111111", email: "warehouse@example.com", username: "warehouse", name: "Warehouse", role: "warehouse", is_active: true, created_at: "2026-09-24" },
+    { user_id: "33333333-3333-4333-8333-333333333333", email: "owner@example.com", username: "owner", name: "Owner", role: "owner", is_active: true, created_at: "2026-09-24" },
   ];
   let creates = 0, passwordChanges = 0, deletes = 0, createdAuthOptions, handler;
   const builder = () => {
@@ -71,7 +71,7 @@ test("cannot create or modify Founder through the web API", async () => {
 
 test("Founder creates a Warehouse member without email and can set a member password", async () => {
   const fn = makeFunction();
-  const created = await fn.call("founder-token", { action: "create", email: "new@example.com", name: "New", role: "warehouse", password: "LongPassword1!" });
+  const created = await fn.call("founder-token", { action: "create", email: "new@example.com", username: "new-user", name: "New", role: "warehouse", password: "LongPassword1!" });
   assert.equal(created.status, 201);
   assert.equal(fn.creates, 1);
   assert.equal(fn.createdAuthOptions.email_confirm, true);
@@ -80,14 +80,16 @@ test("Founder creates a Warehouse member without email and can set a member pass
   assert.equal((await fn.call("founder-token", { action: "create", email: "short@example.com", name: "Short", role: "warehouse", password: "short" })).status, 400);
   assert.equal((await fn.call("founder-token", { action: "create", email: "legacy@example.com", name: "Legacy", role: "editor", password: "LongPassword1!" })).status, 400);
   assert.equal(fn.staff[3].role, "warehouse");
+  assert.equal(fn.staff[3].username, "new-user");
   const pw = await fn.call("founder-token", { action: "set_password", user_id: fn.staff[1].user_id, password: "AnotherPassword1!" });
   assert.equal(pw.status, 200);
   assert.equal(fn.passwordChanges, 1);
   assert.equal(pw.body.password, undefined);
-  const update = await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, role: "auditor", is_active: false });
+  const update = await fn.call("founder-token", { action: "update", user_id: fn.staff[1].user_id, username: "auditor-one", role: "auditor", is_active: false });
   assert.equal(update.status, 200);
   assert.equal(fn.staff[1].role, "auditor");
   assert.equal(fn.staff[1].is_active, false);
+  assert.equal(fn.staff[1].username, "auditor-one");
 });
 
 test("Founder may grant Admin and Owner access but cannot grant Founder access", async () => {
@@ -105,7 +107,7 @@ test("Owner manages non-Founder accounts and cannot create Founder", async () =>
   const listed = await fn.call("owner-token", { action: "list" });
   assert.equal(listed.status, 200);
   assert.equal(listed.body.users.some(user => user.role === "founder"), false);
-  assert.equal((await fn.call("owner-token", { action: "create", email: "auditor@example.com", name: "Auditor", role: "auditor", password: "LongPassword1!" })).status, 201);
+  assert.equal((await fn.call("owner-token", { action: "create", email: "auditor@example.com", username: "auditor", name: "Auditor", role: "auditor", password: "LongPassword1!" })).status, 201);
   assert.equal((await fn.call("owner-token", { action: "update", user_id: fn.staff[1].user_id, role: "admin" })).status, 200);
   assert.equal((await fn.call("owner-token", { action: "set_password", user_id: fn.staff[1].user_id, password: "AnotherPassword1!" })).status, 200);
   assert.equal((await fn.call("owner-token", { action: "create", email: "another@example.com", name: "Another", role: "founder", password: "LongPassword1!" })).status, 400);
@@ -116,4 +118,14 @@ test("Founder list includes the immutable Founder account", async () => {
   const listed = await fn.call("founder-token", { action: "list" });
   assert.equal(listed.status, 200);
   assert.equal(listed.body.users.filter(user => user.role === "founder").length, 1);
+});
+
+test("duplicate and invalid usernames are rejected before Auth user creation", async () => {
+  const fn = makeFunction();
+  const duplicate = await fn.call("founder-token", { action: "create", email: "other@example.com", username: "warehouse", name: "Other", role: "warehouse", password: "LongPassword1!" });
+  assert.equal(duplicate.status, 409);
+  assert.equal(duplicate.body.error, "ชื่อผู้ใช้นี้มีบัญชีแล้ว");
+  const invalid = await fn.call("founder-token", { action: "create", email: "invalid@example.com", username: "bad name", name: "Invalid", role: "warehouse", password: "LongPassword1!" });
+  assert.equal(invalid.status, 400);
+  assert.equal(fn.creates, 0);
 });

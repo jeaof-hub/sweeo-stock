@@ -161,7 +161,15 @@
   async function applySession(s) {
     session = s;
     currentRole = null;
-    if (s) { const { data, error } = await sb.rpc("my_role"); if (!error) currentRole = data; }
+    let ownUsername = "";
+    if (s) {
+      const [roleResult, profileResult] = await Promise.all([
+        sb.rpc("my_role"),
+        sb.rpc("my_username"),
+      ]);
+      if (!roleResult.error) currentRole = roleResult.data;
+      if (!profileResult.error) ownUsername = profileResult.data || "";
+    }
     if (currentRole === "editor") currentRole = "warehouse";
     if (currentRole === "viewer") currentRole = "auditor";
     if (currentRole === "sales") currentRole = "auditor";
@@ -169,7 +177,7 @@
     mode = ["founder", "owner", "admin", "warehouse", "auditor"].includes(currentRole) ? "member" : "visitor";
     const isMember = mode === "member";
     $("loginBtn").hidden = !!s; $("userMenu").hidden = !s;
-    $("meEmail").textContent = s ? s.user.email : "";
+    $("meEmail").textContent = s ? `${s.user.email}${ownUsername ? ` · @${ownUsername}` : ""}` : "";
     $("roleBadge").textContent = { founder: "ผู้ก่อตั้ง", owner: "เจ้าของ", admin: "แอดมิน", warehouse: "คลังสินค้า", auditor: "ผู้ตรวจสอบ" }[currentRole] || "ผู้เยี่ยมชม";
     $("roleBadge").classList.toggle("staff", isMember);
     $("roleBadge").classList.toggle("founder", canManageUsers());
@@ -198,14 +206,30 @@
     if (isMember) subscribe(); else unsubscribe();
   }
 
-  $("loginBtn").onclick = () => { $("lgMsg").textContent = ""; openDlg($("dLogin")); setTimeout(() => $("lgEmail").focus(), 50); };
+  $("loginBtn").onclick = () => { $("lgMsg").textContent = ""; openDlg($("dLogin")); setTimeout(() => $("lgIdentity").focus(), 50); };
   $("loginForm").addEventListener("submit", async e => {
     e.preventDefault();
     $("lgSubmit").disabled = true; $("lgMsg").textContent = "";
-    const { error } = await sb.auth.signInWithPassword({ email: $("lgEmail").value.trim(), password: $("lgPw").value });
-    $("lgSubmit").disabled = false;
-    if (error) { $("lgMsg").textContent = /invalid/i.test(error.message) ? "อีเมลหรือรหัสผ่านไม่ถูกต้อง" : "เข้าสู่ระบบไม่สำเร็จ: " + error.message; return; }
-    $("lgPw").value = ""; $("dLogin").close(); toast("เข้าสู่ระบบแล้ว");
+    const identity = $("lgIdentity").value.trim(), password = $("lgPw").value;
+    try {
+      if (identity.includes("@")) {
+        const { error } = await sb.auth.signInWithPassword({ email: identity, password });
+        if (error) throw error;
+      } else {
+        const response = await fetch(`${cfg.SUPABASE_URL}/functions/v1/login-username`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", apikey: cfg.SUPABASE_ANON_KEY },
+          body: JSON.stringify({ username: identity, password }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || "เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง");
+        const { error } = await sb.auth.setSession({ access_token: result.access_token, refresh_token: result.refresh_token });
+        if (error) throw error;
+      }
+      $("lgPw").value = ""; $("dLogin").close(); toast("เข้าสู่ระบบแล้ว");
+    } catch (error) {
+      $("lgMsg").textContent = /invalid|ไม่ถูกต้อง/i.test(error.message) ? "ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง" : "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
+    } finally { $("lgSubmit").disabled = false; }
   });
   $("menuBtn").onclick = () => { const p = $("menuPop"); p.hidden = !p.hidden; $("menuBtn").setAttribute("aria-expanded", String(!p.hidden)); };
   document.addEventListener("click", e => { if (!e.target.closest("#userMenu")) { $("menuPop").hidden = true; $("menuBtn").setAttribute("aria-expanded", "false"); } });
@@ -244,8 +268,9 @@
     box.innerHTML = managedUsers.map(u => {
       const founder = u.role === "founder";
       return `<div class="user-card" data-uid="${esc(u.user_id)}">
-        <div class="user-meta"><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div>
+        <div class="user-meta"><b>${esc(u.name)}</b><small>@${esc(u.username || "–")} · ${esc(u.email)}</small></div>
         ${founder ? '<span class="badge founder">ผู้ก่อตั้ง</span>' : `<div class="user-controls">
+          <label>ชื่อผู้ใช้ <input class="user-username" aria-label="ชื่อผู้ใช้ของ ${esc(u.email)}" value="${esc(u.username || "")}" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,30}[A-Za-z0-9]" autocapitalize="none" spellcheck="false"></label>
           <label>สิทธิ์ <select class="user-role" aria-label="สิทธิ์ของ ${esc(u.email)}">
             <option value="auditor"${["auditor", "sales", "viewer"].includes(u.role) ? " selected" : ""}>ผู้ตรวจสอบ</option>
             <option value="warehouse"${["warehouse", "editor"].includes(u.role) ? " selected" : ""}>คลังสินค้า</option>
@@ -282,8 +307,8 @@
     if ($("uPw1").value !== $("uPw2").value) { $("uMsg").textContent = "รหัสผ่านสองช่องไม่ตรงกัน"; return; }
     $("uInvite").disabled = true;
     try {
-      await userAdmin("create", { email: $("uEmail").value.trim(), name: $("uName").value.trim(), role: $("uRole").value, password: $("uPw1").value });
-      $("uName").value = ""; $("uEmail").value = "";
+      await userAdmin("create", { email: $("uEmail").value.trim(), username: $("uUsername").value.trim(), name: $("uName").value.trim(), role: $("uRole").value, password: $("uPw1").value });
+      $("uName").value = ""; $("uEmail").value = ""; $("uUsername").value = "";
       await refreshUsers();
       toast("สร้างบัญชีแล้ว แจ้งรหัสผ่านให้เจ้าของบัญชี");
     } catch (error) { $("uMsg").textContent = error.message; }
@@ -308,10 +333,11 @@
     if (!user || user.role === "founder") return;
     const role = row.querySelector(".user-role").value;
     const is_active = row.querySelector(".user-active").value === "true";
+    const username = row.querySelector(".user-username").value.trim();
     if (user.is_active && !is_active && !window.confirm(`ปิดการใช้งาน ${user.email}?`)) return;
     button.disabled = true; $("uMsg").textContent = "";
     try {
-      const result = await userAdmin("update", { user_id: user.user_id, role, is_active });
+      const result = await userAdmin("update", { user_id: user.user_id, username, role, is_active });
       managedUsers = managedUsers.map(u => u.user_id === result.user.user_id ? result.user : u);
       renderUsers();
       toast("บันทึกสิทธิ์แล้ว");

@@ -98,7 +98,7 @@
   <div class="dlg-head"><div><h2 id="lgTitle">เข้าสู่ระบบ</h2><p>สำหรับพนักงานที่ได้รับบัญชีจากผู้ดูแลระบบ</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
   <form class="dlg-body" id="loginForm">
     <div class="grid">
-      <div class="f full"><label for="lgEmail">อีเมล</label><input id="lgEmail" type="email" autocomplete="username" required></div>
+      <div class="f full"><label for="lgIdentity">ชื่อผู้ใช้หรืออีเมล</label><input id="lgIdentity" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="f full"><label for="lgPw">รหัสผ่าน</label><input id="lgPw" type="password" autocomplete="current-password" required></div>
     </div>
     <p class="note">ลืมรหัสผ่าน ติดต่อผู้ดูแลระบบเพื่อรีเซ็ต</p>
@@ -125,6 +125,7 @@
       <div class="grid">
         <div class="f"><label for="uName">ชื่อที่แสดง</label><input id="uName" maxlength="100" required autocomplete="off"></div>
         <div class="f"><label for="uEmail">อีเมล</label><input id="uEmail" type="email" required autocomplete="off"></div>
+        <div class="f full"><label for="uUsername">ชื่อผู้ใช้ (3–32 ตัวอักษรอังกฤษ/ตัวเลข)</label><input id="uUsername" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,30}[A-Za-z0-9]" autocapitalize="none" spellcheck="false" required autocomplete="off"></div>
         <div class="f full"><label for="uRole">สิทธิ์</label><select id="uRole"><option value="auditor">ผู้ตรวจสอบ</option><option value="warehouse">คลังสินค้า</option><option value="admin">แอดมิน</option><option value="owner">เจ้าของ</option></select></div>
         <div class="f"><label for="uPw1">รหัสผ่านเริ่มต้น (8–128 ตัวอักษร)</label><input id="uPw1" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
         <div class="f"><label for="uPw2">ยืนยันรหัสผ่าน</label><input id="uPw2" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></div>
@@ -213,7 +214,7 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="i18n.js?v=stock-gauge-1"></script>
-<script src="app.js?v=phase1-permissions-1"></script>
+<script src="i18n.js?v=username-login-1"></script>
+<script src="app.js?v=username-login-1"></script>
 </body>
 </html>

@@ -11,6 +11,9 @@
     "กำลังโหลดข้อมูล": "Loading stock",
     "ผู้เยี่ยมชม": "Visitor", "ผู้ตรวจสอบ": "Auditor", "คลังสินค้า": "Warehouse", "แอดมิน": "Admin", "เจ้าของ": "Owner", "ผู้ก่อตั้ง": "Founder",
     "เข้าสู่ระบบ": "Sign in", "บัญชี": "Account", "ส่งออก Excel": "Export Excel", "จัดการผู้ใช้": "Manage users", "เปลี่ยนรหัสผ่าน": "Change password", "ออกจากระบบ": "Sign out",
+    "ชื่อผู้ใช้": "Username", "ชื่อผู้ใช้หรืออีเมล": "Username or email", "ชื่อผู้ใช้ (3–32 ตัวอักษรอังกฤษ/ตัวเลข)": "Username (3–32 Latin letters/numbers)", "ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง": "Incorrect username/email or password",
+    "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง": "Incorrect username or password", "พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่": "Too many sign-in attempts. Please wait and try again", "เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง": "Sign-in failed. Please try again",
+    "ชื่อผู้ใช้นี้มีบัญชีแล้ว": "This username is already in use", "อีเมลหรือชื่อผู้ใช้นี้มีบัญชีแล้ว": "This email or username is already in use",
     "สต็อก": "Stock", "ประวัติรับเข้า/ส่งออก": "Stock movements", "รายการที่ถูกลบ": "Deleted entries", "บันทึกการเปลี่ยนแปลง": "Change log",
     "ค้นหารุ่น รหัสสินค้า หรือสเปก": "Search model, product code or specification", "ค้นหาสินค้า": "Search products", "สถานะสต็อก": "Stock status",
     "ประเภทสินค้า": "Product type", "ทุกประเภท": "All types", "แผนก": "Department", "ทุกแผนก": "All departments", "เรียงลำดับ": "Sort by",
@@ -77,6 +80,7 @@
     [/^รหัสนี้ใช้กับ (.+) แล้ว กดบันทึกอีกครั้งถ้าตั้งใจใช้ซ้ำ$/, "This code is already used by $1. Save again to confirm the duplicate."],
     [/^ปิดการใช้งาน (.+)\?$/, "Disable $1?"],
     [/^สิทธิ์ของ (.+)$/, "Role of $1"],
+    [/^ชื่อผู้ใช้ของ (.+)$/, "Username of $1"],
     [/^สถานะของ (.+)$/, "Status of $1"],
     [/^([\d,.]+) รายการ$/, "$1 entries"],
     [/^สเกลคงเหลือ ([\d,.]+)\+$/, "Balance scale $1+"]

@@ -1,6 +1,7 @@
 # Keep stock exports and migration data out of the public repository.
 supabase-data-DO-NOT-UPLOAD/
 migration/private/
+supabase/.temp/
 *.xlsx
 *.xls
 *.csv

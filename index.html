@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=phase-3-2">
+<link rel="stylesheet" href="style.css?v=phase-3b-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -176,6 +176,7 @@
       <summary>รายละเอียดเอกสาร</summary>
     <div class="grid">
       <div class="f"><label for="eDate">วันที่</label><input type="date" id="eDate" required></div>
+      <div class="f"><label for="eDeliveryDate">วันที่ส่งของ</label><input type="date" id="eDeliveryDate" required></div>
       <div class="f"><label for="eInv" id="eInvL">เลขที่ INV / เอกสาร</label><input id="eInv" autocomplete="off"></div>
       <div class="f full"><label for="eCust" id="eCustL">ลูกค้า</label><input id="eCust" list="custList" autocomplete="off"></div>
       <div class="f"><label for="eDept">แผนก / ประเภทงาน</label><input id="eDept" list="deptList" autocomplete="off"></div>
@@ -234,7 +235,8 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="i18n.js?v=phase-3-1"></script>
-<script src="app.js?v=phase-3-1"></script>
+<script src="i18n.js?v=phase-3b-1"></script>
+<script src="delivery-note.js?v=phase-3b-1"></script>
+<script src="app.js?v=phase-3b-1"></script>
 </body>
 </html>

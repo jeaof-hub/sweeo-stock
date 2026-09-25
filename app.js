@@ -18,6 +18,7 @@
   const newerFirst = (a, b) => (b.date || "").localeCompare(a.date || "") || String(b.created_at).localeCompare(String(a.created_at));
   const olderFirst = (a, b) => (a.date || "").localeCompare(b.date || "") || String(a.created_at).localeCompare(String(b.created_at));
   const statusLabel = { red: "ต้องสั่งผลิต", amber: "ใกล้ถึงจุดสั่ง", green: "ปกติ" };
+  const purposeLabel = { sale: "ขายออก", gift: "สินค้าแถม", claim: "เคลม", other: "อื่น ๆ" };
 
   /* ---------- state ---------- */
   let sb = null;
@@ -506,10 +507,10 @@
     count.textContent = `${fmt(rows.length)} คำขอ`;
     target.innerHTML = rows.length ? `<div class="requests">${rows.map(r => {
       const lines = requestLines(r.id); const review = which === "pending" && canReviewDispatch(r);
-      return `<article class="request-card" data-request="${esc(r.id)}"><div class="request-head"><div><b>${esc(r.customer || "ไม่ระบุลูกค้า")}</b><small>${esc(r.doc_no || "ไม่มีเลขเอกสาร")} · ${esc(thDate(r.document_date))} · ${esc(staffNames[r.requester_id] || "พนักงาน")}</small></div><span class="tag">${requestStatusLabel[r.status] || r.status}</span></div>
-      <div class="request-lines">${lines.map(l => `<label><span>${esc(itemName(items.get(l.item_id)))} <small>ขอ ${fmt(l.requested_qty)}</small></span>${review ? `<input class="approve-qty" data-line="${esc(l.id)}" data-requested="${esc(l.requested_qty)}" type="number" min="1" max="${esc(l.requested_qty)}" step="1" value="${esc(l.requested_qty)}">` : `<b>${fmt(l.approved_qty ?? l.requested_qty)}</b>`}</label>`).join("")}</div>
+      return `<article class="request-card" data-request="${esc(r.id)}"><div class="request-head"><div><b>${esc(r.customer || "ไม่ระบุลูกค้า")}</b><small>${esc(r.delivery_note_no || "ฉบับเดิม")} · ${esc(r.doc_no || "ไม่มีเลขเอกสาร")} · ${esc(thDate(r.document_date))} · ${esc(staffNames[r.requester_id] || "พนักงาน")}</small></div><span class="tag">${requestStatusLabel[r.status] || r.status}</span></div>
+      <div class="request-lines">${lines.map(l => `<label><span>${esc(itemName(items.get(l.item_id)))} <small>ขอ ${fmt(l.requested_qty)} · ${esc(purposeLabel[l.purpose] || purposeLabel.sale)} · ${l.return_required ? "คืน" : "ไม่คืน"}</small></span>${review ? `<input class="approve-qty" data-line="${esc(l.id)}" data-requested="${esc(l.requested_qty)}" type="number" min="1" max="${esc(l.requested_qty)}" step="1" value="${esc(l.requested_qty)}">` : `<b>${fmt(l.approved_qty ?? l.requested_qty)}</b>`}</label>`).join("")}</div>
       ${r.note ? `<p class="note">${esc(r.note)}</p>` : ""}${r.rejection_reason ? `<p class="msg">เหตุผล: ${esc(r.rejection_reason)}</p>` : ""}
-      <div class="btnrow">${review ? '<button class="btn primary sm" data-request-action="approve">อนุมัติ</button><button class="btn danger sm" data-request-action="reject">ปฏิเสธ</button>' : ""}${which === "mine" && r.status === "pending" ? '<button class="btn sm" data-request-action="edit">แก้ไข</button><button class="btn danger sm" data-request-action="cancel">ยกเลิกคำขอ</button>' : ""}</div></article>`;
+      <div class="btnrow">${review ? '<button class="btn primary sm" data-request-action="approve">อนุมัติ</button><button class="btn danger sm" data-request-action="reject">ปฏิเสธ</button>' : ""}${which === "mine" && r.status === "pending" ? '<button class="btn sm" data-request-action="edit">แก้ไข</button><button class="btn danger sm" data-request-action="cancel">ยกเลิกคำขอ</button>' : ""}${["pending","approved"].includes(r.status) ? `<button class="btn sm" data-request-action="delivery">${r.status === "approved" ? "พิมพ์ / บันทึก PDF" : "ดูใบส่งของฉบับร่าง"}</button>` : ""}</div></article>`;
     }).join("")}</div>` : '<div class="state"><h2>ไม่มีคำขอ</h2></div>';
   }
 
@@ -529,6 +530,7 @@
         if (!window.confirm("ยกเลิกคำขอนี้?")) return;
         const { error } = await sb.rpc("cancel_dispatch_request", { p_request_id: id }); if (error) throw error;
       } else if (action === "edit") { openRequestEdit(id); return; }
+      else if (action === "delivery") { openDeliveryNote(id); return; }
       toast("บันทึกคำขอแล้ว"); await reload();
     } catch (error) { toast(dbErr(error)); } finally { button.disabled = false; }
   }
@@ -651,7 +653,8 @@
     const w = document.createElement("div");
     w.innerHTML = `<div class="line"><div class="picker"><input type="text" placeholder="ค้นหารุ่นหรือรหัสสินค้า" autocomplete="off" aria-label="สินค้า"><div class="sel"></div><div class="sugg" hidden></div></div>
       <input class="qtyin" type="number" inputmode="numeric" min="1" step="1" placeholder="จำนวน" aria-label="จำนวน">
-      <button class="btn sm" type="button" data-rm>ลบ</button></div>`;
+      <button class="btn sm" type="button" data-rm>ลบ</button>
+      <div class="dispatch-meta" ${formKind === "in" ? "hidden" : ""}><label>วัตถุประสงค์<select class="purpose"><option value="sale">ขายออก</option><option value="gift">สินค้าแถม</option><option value="claim">เคลม</option><option value="other">อื่น ๆ</option></select></label><label class="return-check"><input class="return-required" type="checkbox"> ต้องนำกลับคืน</label><label class="line-note-label">หมายเหตุรายการ<input class="line-note" type="text" maxlength="300" autocomplete="off"></label></div></div>`;
     const line = w.firstChild; $("eLines").appendChild(line); wirePicker(line);
     if (itemId) pick(line, itemId);
     return line;
@@ -705,7 +708,7 @@
     $("eSub").textContent = kind === "out" ? (["warehouse","admin"].includes(currentRole) ? "คำขอจะถูกส่งไปรอผู้มีสิทธิ์อนุมัติ" : "รายการจะตัดยอดทันที") : "เพิ่มสต็อกจากการรับสินค้าเข้าคลัง";
     $("eCustL").textContent = kind === "out" ? "ลูกค้า" : "รับจาก / แหล่งที่มา";
     $("eInvL").textContent = kind === "out" ? "เลขที่ INV / เอกสาร" : "เลขที่เอกสารรับเข้า";
-    $("eDate").value = today(); $("eInv").value = ""; $("eNote").value = ""; $("eDept").value = ""; $("eMsg").textContent = "";
+    $("eDate").value = today(); $("eDeliveryDate").value = today(); $("eInv").value = ""; $("eNote").value = ""; $("eDept").value = ""; $("eMsg").textContent = "";
     $("eCust").value = kind === "in" ? "STOCK IN" : "";
     $("eSave").textContent = "ตรวจสอบรายการ"; $("eMore").open = false;
     $("eLines").innerHTML = ""; addLine(itemId);
@@ -718,8 +721,8 @@
   let entryDraft = null;
   function collectEntryDraft() {
     if ((formKind === "out" && !canDispatch()) || (formKind === "in" && !canReceive())) return;
-    const date = $("eDate").value, msg = $("eMsg"); msg.textContent = "";
-    if (!date) { msg.textContent = "ใส่วันที่ก่อนบันทึก"; return null; }
+    const date = $("eDate").value, deliveryDate = $("eDeliveryDate").value, msg = $("eMsg"); msg.textContent = "";
+    if (!date || (formKind === "out" && !deliveryDate)) { msg.textContent = "ใส่วันที่ก่อนบันทึก"; return null; }
     const rows = [];
     for (const l of $("eLines").children) {
       const id = l.dataset.item, q = Number(l.querySelector(".qtyin").value), typed = l.querySelector(".picker input").value.trim();
@@ -728,17 +731,18 @@
       if (!Number.isInteger(q) || q < 1) { msg.textContent = "ใส่จำนวนเต็มที่มากกว่า 0 ให้ครบทุกบรรทัด"; return null; }
       const it = items.get(id);
       rows.push({ item_id: id, code: it.code || "", model: it.model || "", date, kind: formKind, qty: q,
+        purpose: l.querySelector(".purpose")?.value || "sale", return_required: !!l.querySelector(".return-required")?.checked, line_note: l.querySelector(".line-note")?.value.trim() || "",
         customer: $("eCust").value.trim(), doc_no: $("eInv").value.trim(), dept: $("eDept").value.trim(),
         sale: $("eSale").value.trim(), note: $("eNote").value.trim(), source: "app", created_by: session.user.id });
     }
     if (!rows.length) { msg.textContent = "เพิ่มสินค้าอย่างน้อยหนึ่งรายการ"; return null; }
-    return { rows, date, kind: formKind, requestId: $("dEntry").dataset.requestId || "" };
+    return { rows, date, deliveryDate: formKind === "out" ? deliveryDate : date, kind: formKind, requestId: $("dEntry").dataset.requestId || "" };
   }
   $("eSave").onclick = () => {
     entryDraft = collectEntryDraft(); if (!entryDraft) return;
     const waits = entryDraft.kind === "out" && ["warehouse","admin"].includes(currentRole);
     $("erMode").textContent = waits ? "รายการนี้จะส่งไปรออนุมัติ และยังไม่ตัดยอด" : "รายการนี้จะตัดยอดสต็อกทันที";
-    $("erBody").innerHTML = `<div class="review-mode">${esc($("erMode").textContent)}</div><div class="review-lines">${entryDraft.rows.map(r => `<div class="review-line"><span>${esc(itemName(items.get(r.item_id)))}</span><b>${fmt(r.qty)} ชิ้น</b></div>`).join("")}</div><dl class="meta"><dt>วันที่</dt><dd>${esc(thDate(entryDraft.date))}</dd><dt>เอกสาร</dt><dd>${esc($("eInv").value.trim() || "–")}</dd><dt>ลูกค้า</dt><dd>${esc($("eCust").value.trim() || "–")}</dd></dl>`;
+    $("erBody").innerHTML = `<div class="review-mode">${esc($("erMode").textContent)}</div><div class="review-lines">${entryDraft.rows.map(r => `<div class="review-line"><span>${esc(itemName(items.get(r.item_id)))}${r.kind === "out" ? `<small>${esc(purposeLabel[r.purpose])} · ${r.return_required ? "คืน" : "ไม่คืน"}${r.line_note ? ` · ${esc(r.line_note)}` : ""}</small>` : ""}</span><b>${fmt(r.qty)} ชิ้น</b></div>`).join("")}</div><dl class="meta"><dt>วันที่</dt><dd>${esc(thDate(entryDraft.date))}</dd><dt>เอกสาร</dt><dd>${esc($("eInv").value.trim() || "–")}</dd><dt>ลูกค้า</dt><dd>${esc($("eCust").value.trim() || "–")}</dd></dl>`;
     $("erMsg").textContent = ""; $("dEntry").close(); openDlg($("dEntryReview"));
   };
   $("erBack").onclick = () => { $("dEntryReview").close(); openDlg($("dEntry")); };
@@ -747,7 +751,7 @@
     $("erConfirm").disabled = true;
     let error;
     if (entryDraft.kind === "out") {
-      const args = { p_document_date: entryDraft.date, p_customer: $("eCust").value.trim(), p_doc_no: $("eInv").value.trim(), p_dept: $("eDept").value.trim(), p_sale: $("eSale").value.trim(), p_note: $("eNote").value.trim(), p_lines: entryDraft.rows.map(r => ({ item_id: r.item_id, qty: r.qty })) };
+      const args = { p_document_date: entryDraft.date, p_delivery_date: entryDraft.deliveryDate, p_customer: $("eCust").value.trim(), p_doc_no: $("eInv").value.trim(), p_dept: $("eDept").value.trim(), p_sale: $("eSale").value.trim(), p_note: $("eNote").value.trim(), p_lines: entryDraft.rows.map(r => ({ item_id: r.item_id, qty: r.qty, purpose: r.purpose, return_required: r.return_required, line_note: r.line_note })) };
       const requestId = entryDraft.requestId;
       ({ error } = requestId ? await sb.rpc("update_dispatch_request", { p_request_id: requestId, ...args }) : await sb.rpc("create_dispatch_request", args));
     } else ({ error } = await sb.from("movements").insert(entryDraft.rows));
@@ -759,8 +763,22 @@
   function openRequestEdit(id) {
     const r=dispatchRequests.find(x=>x.id===id); if(!r || r.status!=="pending" || r.requester_id!==session?.user.id) return;
     openEntryForm("out"); $("dEntry").dataset.requestId=id; $("eTitle").textContent="แก้ไขคำขอเบิก"; $("eSave").textContent="ตรวจสอบรายการ"; $("eMore").open=true;
-    $("eDate").value=String(r.document_date).slice(0,10); $("eCust").value=r.customer||""; $("eInv").value=r.doc_no||""; $("eDept").value=r.dept||""; $("eSale").value=r.sale||""; $("eNote").value=r.note||""; $("eLines").innerHTML="";
-    requestLines(id).forEach(l=>{const line=addLine(l.item_id); line.querySelector(".qtyin").value=l.requested_qty; updateLineInfo(line);});
+    $("eDate").value=String(r.document_date).slice(0,10); $("eDeliveryDate").value=String(r.delivery_date||r.document_date).slice(0,10); $("eCust").value=r.customer||""; $("eInv").value=r.doc_no||""; $("eDept").value=r.dept||""; $("eSale").value=r.sale||""; $("eNote").value=r.note||""; $("eLines").innerHTML="";
+    requestLines(id).forEach(l=>{const line=addLine(l.item_id); line.querySelector(".qtyin").value=l.requested_qty; line.querySelector(".purpose").value=l.purpose||"sale"; line.querySelector(".return-required").checked=!!l.return_required; line.querySelector(".line-note").value=l.line_note||""; updateLineInfo(line);});
+  }
+
+  function deliveryDocumentHtml(request) {
+    const purposeNames = window.SWEEO_I18N?.lang === "en" ? { sale:"Sale", gift:"Gift", claim:"Claim", other:"Other" } : purposeLabel;
+    return window.SWEEO_DELIVERY.buildDocument({
+      request, lines: requestLines(request.id), itemById: id => items.get(id), staffNames,
+      purposeNames, lang: window.SWEEO_I18N?.lang || "th",
+      formatNumber: fmt, formatDate: thDate
+    });
+  }
+  function openDeliveryNote(id) {
+    const request=dispatchRequests.find(r=>r.id===id); if(!request || !["pending","approved"].includes(request.status)) return;
+    const win=window.open("","_blank"); if(!win){toast("เบราว์เซอร์ปิดกั้นหน้าพิมพ์ กรุณาอนุญาต Pop-up"); return;}
+    win.document.open(); win.document.write(deliveryDocumentHtml(request)); win.document.close();
   }
 
   /* ---------- count adjust ---------- */

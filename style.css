@@ -166,6 +166,12 @@ td.w{white-space:normal;min-width:150px}
 .sugg button:hover,.sugg button.on{background:var(--bg)}
 .sugg small{display:block;color:var(--muted);font-size:.78rem}
 .qtyin{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);text-align:right;font-variant-numeric:tabular-nums}
+.dispatch-meta{grid-column:1/-1;display:grid;grid-template-columns:180px 150px minmax(180px,1fr);gap:8px;align-items:end;padding-top:2px}
+.dispatch-meta label{display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:.78rem}
+.dispatch-meta select,.dispatch-meta input[type="text"]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.dispatch-meta .return-check{flex-direction:row;align-items:center;min-height:38px;color:var(--ink)}
+.dispatch-meta .return-check input{width:auto}
+@media (max-width:620px){.dispatch-meta{grid-template-columns:1fr 1fr}.dispatch-meta .line-note-label{grid-column:1/-1}}
 .diff{margin-top:10px;padding:12px;border-radius:10px;background:var(--bg);font-size:.95rem}
 .diff b{font-variant-numeric:tabular-nums}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:20;font-size:.92rem;max-width:90vw}

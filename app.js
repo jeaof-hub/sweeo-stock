@@ -1,7 +1,7 @@
 /* SWEEO Stock — GitHub Pages + Supabase
  * Visitor (ไม่ล็อกอิน): เห็นเฉพาะยอดคงเหลือผ่านฟังก์ชัน public_stock()
  * Auditor: อ่านรายละเอียดสต็อกและประวัติ
- * Warehouse: บันทึกรับเข้า/ส่งออก และลบรายการของตนเองในวันเดียวกัน
+ * Warehouse: บันทึกส่งออก และลบรายการของตนเองในวันเดียวกัน (สิทธิ์ชั่วคราวถึง Phase 2)
  * Admin / Owner / Founder: จัดการสินค้า ปรับยอด ส่งออกข้อมูล และดูรายการที่ถูกลบ
  */
 (function () {
@@ -33,7 +33,9 @@
   let statusFilter = "";
   let channel = null, reloadTimer = null, loading = false;
   const canManageUsers = () => ["founder", "owner"].includes(currentRole);
-  const canRecord = () => ["founder", "owner", "admin", "warehouse"].includes(currentRole);
+  const canDispatch = () => ["founder", "owner", "admin", "warehouse"].includes(currentRole);
+  const canReceive = () => ["founder", "owner", "admin"].includes(currentRole);
+  const canRecord = () => canDispatch() || canReceive();
   const canManageStock = () => ["founder", "owner", "admin"].includes(currentRole);
   const bangkokDate = value => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value));
   const canDeleteEntry = e => !!e && (canManageStock() || (currentRole === "warehouse" && e.created_by === session?.user.id && bangkokDate(e.created_at) === bangkokDate(Date.now())));
@@ -123,7 +125,7 @@
       fetchAll(() => sb.from("items").select("*").eq("active", true).order("id")),
       fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
       canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false })) : Promise.resolve([]),
-      canManageUsers() ? sb.rpc("staff_display_names") : Promise.resolve({ data: [] }),
+      sb.rpc("staff_display_names"),
       canManageUsers() ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201) : Promise.resolve({ data: [] })
     ]);
     items = new Map(its.map(r => [r.id, r]));
@@ -172,6 +174,7 @@
     $("roleBadge").classList.toggle("staff", isMember);
     $("roleBadge").classList.toggle("founder", canManageUsers());
     $("tabs").hidden = !isMember; $("actions").hidden = !canRecord(); $("newItemBtn").hidden = !canManageStock();
+    $("outBtn").hidden = !canDispatch(); $("inBtn").hidden = !canReceive();
     $("tabAudit").hidden = !canManageStock();
     $("tabChanges").hidden = !canManageUsers();
     $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
@@ -514,7 +517,7 @@
     const avg = Number(it.avg_month), rop = Number(it.rop) || 0;
     const cover = avg > 0 ? c.bal / avg : null;
     let h = `<div class="flow"><div><small>ยอดยกมา</small><b>${fmt(Number(it.opening))}</b></div><div><small>รับเข้า</small><b>${fmt(c.inQ)}</b></div><div><small>ส่งออก</small><b>${fmt(c.out)}</b></div><div class="bal"><small>คงเหลือ</small><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b></div></div>
-      ${canRecord() || canManageStock() ? `<div class="btnrow">${canRecord() ? '<button class="btn primary sm" type="button" data-act="out">ส่งออกรายการนี้</button><button class="btn sm" type="button" data-act="in">รับเข้า</button>' : ""}${canManageStock() ? '<button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button>' : ""}</div>` : ""}
+      ${canRecord() || canManageStock() ? `<div class="btnrow">${canDispatch() ? '<button class="btn primary sm" type="button" data-act="out">ส่งออกรายการนี้</button>' : ""}${canReceive() ? '<button class="btn sm" type="button" data-act="in">รับเข้า</button>' : ""}${canManageStock() ? '<button class="btn sm" type="button" data-act="count">ปรับยอดตามการนับ</button><button class="btn sm" type="button" data-act="edit">แก้ไขข้อมูลสินค้า</button>' : ""}</div>` : ""}
       <dl class="meta"><dt>รหัสสินค้า</dt><dd>${esc(it.code || "–")}</dd><dt>ประเภท</dt><dd>${esc(it.type)}</dd><dt>แผนก</dt><dd>${esc(it.dept)}</dd><dt>ที่เก็บ</dt><dd>${esc(it.loc || "–")}</dd>
       ${it.avg_month != null ? `<dt>ขายเฉลี่ยต่อเดือน</dt><dd>${fmt(avg)} ชิ้น</dd>` : ""}${rop ? `<dt>จุดสั่งผลิต</dt><dd>${fmt(rop)} ชิ้น${c.status ? " (" + statusLabel[c.status] + ")" : ""}</dd>` : ""}
       ${cover !== null ? `<dt>พอขายอีกประมาณ</dt><dd>${fmt(cover)} เดือน</dd>` : ""}<dt>หมายเหตุ</dt><dd>${esc(it.remark || "–")}</dd></dl><h3>ประวัติรับเข้า/ส่งออก</h3>`;
@@ -534,7 +537,7 @@
     const id = $("dItem").dataset.id;
     if (b.dataset.del) return confirmDelete(b.dataset.del);
     const a = b.dataset.act;
-    if (canRecord() && (a === "out" || a === "in")) { $("dItem").close(); openEntryForm(a, id); }
+    if ((a === "out" && canDispatch()) || (a === "in" && canReceive())) { $("dItem").close(); openEntryForm(a, id); }
     if (canManageStock() && a === "count") openCount(id);
     if (canManageStock() && a === "edit") openEdit(id);
   });
@@ -600,7 +603,7 @@
     line.querySelector("[data-rm]").addEventListener("click", () => { line.remove(); if (!$("eLines").children.length) addLine(); });
   }
   function openEntryForm(kind, itemId) {
-    if (!canRecord()) return;
+    if ((kind === "out" && !canDispatch()) || (kind === "in" && !canReceive())) return;
     formKind = kind;
     $("eTitle").textContent = kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า";
     $("eSub").textContent = kind === "out" ? "ตัดสต็อกตามใบส่งของ ใส่ได้หลายรายการในเอกสารเดียว" : "เพิ่มสต็อกจากการรับสินค้าเข้าคลัง";
@@ -617,7 +620,7 @@
   $("outBtn").onclick = () => openEntryForm("out");
   $("inBtn").onclick = () => openEntryForm("in");
   $("eSave").onclick = async () => {
-    if (!canRecord()) return;
+    if ((formKind === "out" && !canDispatch()) || (formKind === "in" && !canReceive())) return;
     const date = $("eDate").value, msg = $("eMsg"); msg.textContent = "";
     if (!date) { msg.textContent = "ใส่วันที่ก่อนบันทึก"; return; }
     const rows = [];

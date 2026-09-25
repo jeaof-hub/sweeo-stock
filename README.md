@@ -28,6 +28,8 @@
 | `supabase/07_viewer_read_access.sql` | ให้ Viewer อ่านข้อมูลสต็อกและประวัติภายใน โดยยังเขียนไม่ได้ |
 | `supabase/08_role_matrix_and_audit.sql` | ย้ายบทบาทเดิมเป็นฝ่ายขาย/คลังสินค้า ตั้งกฎสิทธิ์ใหม่ และเปิด audit log เฉพาะผู้ก่อตั้ง |
 | `supabase/09_owner_admin_auditor.sql` | ย้ายผู้จัดการเป็นแอดมิน ฝ่ายขายเป็นผู้ตรวจสอบ และเพิ่มสิทธิ์เจ้าของ |
+| `supabase/10_role_permissions.sql` | สิทธิ์เฟส 1: จำกัดคลังให้ส่งออกอย่างเดียว เปิดชื่อผู้บันทึก และป้องกันบัญชีผู้ก่อตั้ง |
+| `supabase/reference_schema.sql` | schema รวมสำหรับติดตั้งใหม่เท่านั้น ห้ามรันบน Production ที่มีข้อมูล |
 | `supabase/functions/manage-users/index.ts` | Edge Function สำหรับจัดการผู้ใช้โดยผู้ก่อตั้งหรือเจ้าของ |
 
 ไฟล์ข้อมูลตั้งต้น (`02_seed_items.sql`, `03_seed_movements.sql`) อยู่นอกโฟลเดอร์นี้โดยตั้งใจ
@@ -48,14 +50,14 @@
 3. รอจนโปรเจกต์สร้างเสร็จ (1–2 นาที)
 
 ### 2. สร้างตารางและนำเข้าข้อมูล
-เปิดเมนู **SQL Editor** แล้วรัน `01_schema.sql` ก่อน
+เปิดเมนู **SQL Editor** แล้วรัน `supabase/reference_schema.sql` สำหรับโปรเจกต์ใหม่เท่านั้น ห้ามใช้ไฟล์นี้กับ Production ที่มีข้อมูลอยู่แล้ว
 ใช้ไฟล์ส่งออก Google Sheet ล่าสุดสร้างชุดข้อมูลส่วนตัวด้วย Python ที่มี `openpyxl`:
 ```bash
 python tools/prepare_migration.py --xlsx latest-stock.xlsx --zip sweeo-stock-github.zip
 ```
 สคริปต์จะหยุดหากรายการหรือยอดไม่ตรงกับไฟล์ ZIP และจะเก็บ SQL/CSV ที่สร้างใน `migration/private/` ซึ่ง Git ไม่ติดตาม
 สำหรับฐานข้อมูลใหม่ นำเข้าตามลำดับนี้ (เลือก SQL Editor หรือ Table Editor → Import CSV อย่างใดอย่างหนึ่งสำหรับข้อมูลแต่ละตาราง)
-1. `01_schema.sql`
+1. `supabase/reference_schema.sql`
 2. `migration/private/02_seed_items.sql` หรือ `02_seed_items.csv` → ตาราง `items`
 3. `migration/private/03_seed_movements.sql` หรือ `03_seed_movements.csv` → ตาราง `movements`
 
@@ -83,7 +85,7 @@ from auth.users where email = 'founder@example.com';
 5. สำหรับฐานข้อมูลที่สร้างก่อนแก้สิทธิ์นี้ ให้รัน `supabase/05_manage_users_permissions.sql` ใน SQL Editor เพื่อให้ `service_role` เข้าถึง `staff` ได้; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
 6. สำหรับฐานข้อมูลเดิมที่เคยมีบทบาท `staff` ให้รัน `supabase/06_fix_role_constraint.sql` เพื่อให้รับบทบาท Editor / Viewer; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีข้อจำกัดที่ถูกต้องแล้ว
 7. สำหรับฐานข้อมูลที่สร้างก่อนสิทธิ์ Viewer แบบอ่านภายใน ให้รัน `supabase/07_viewer_read_access.sql`; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
-8. รัน `supabase/08_role_matrix_and_audit.sql` แล้ว `supabase/09_owner_admin_auditor.sql` ตามลำดับเพื่อใช้สิทธิ์ปัจจุบันและเริ่มเก็บ log; บัญชี Editor เดิมจะเป็นคลังสินค้า และ Viewer เดิมจะเป็นผู้ตรวจสอบ
+8. รัน `supabase/08_role_matrix_and_audit.sql`, `supabase/09_owner_admin_auditor.sql` และ `supabase/10_role_permissions.sql` ตามลำดับเพื่อใช้สิทธิ์ปัจจุบันและเริ่มเก็บ log; บัญชี Editor เดิมจะเป็นคลังสินค้า และ Viewer เดิมจะเป็นผู้ตรวจสอบ
 9. ไปที่ **Edge Functions → Deploy a new function → Via Editor** ตั้งชื่อ `manage-users` แล้ววางโค้ดจาก `supabase/functions/manage-users/index.ts` และ Deploy จากนั้นปิด **Verify JWT with legacy secret** ใน Settings เพราะฟังก์ชันตรวจ JWT ผ่าน Supabase Auth เองและตรวจบทบาทใน `staff` ทุกครั้ง
 10. ผู้ก่อตั้งหรือเจ้าของเข้าสู่ระบบเว็บ กด **บัญชี → จัดการผู้ใช้** เพื่อสร้างสมาชิก เลือกสิทธิ์ และกำหนดรหัสผ่านเริ่มต้น ไม่มีอีเมลเชิญ ผู้ดูแลต้องแจ้งรหัสผ่านให้เจ้าของบัญชีด้วยช่องทางที่เลือก และสมาชิกควรเปลี่ยนรหัสผ่านหลังเข้าสู่ระบบครั้งแรก
 
@@ -122,6 +124,7 @@ window.SWEEO_CONFIG = {
 - **ยอดคงเหลือ** = ยอดยกมา + รับเข้า − ส่งออก (ไม่นับรายการที่ถูกลบ)
 - **ดูรายการที่ถูกลบ**: แอดมิน เจ้าของ และผู้ก่อตั้งใช้แท็บ **รายการที่ถูกลบ** บนเว็บ
 - **ดูบันทึกการเปลี่ยนแปลง**: เจ้าของและผู้ก่อตั้งใช้แท็บ **บันทึกการเปลี่ยนแปลง** บนเว็บ เริ่มเก็บข้อมูลตั้งแต่ติดตั้ง `08_role_matrix_and_audit.sql`
+- **สิทธิ์คลังสินค้าในเฟส 1**: บันทึกส่งออกและลบรายการของตนเองภายในวันเดียวกันได้ แต่รับเข้าและปรับยอดไม่ได้
 
 ตรวจรายการที่ถูกลบใน SQL Editor ได้ด้วย:
 ```sql

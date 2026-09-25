@@ -42,13 +42,21 @@ Deno.serve(async request => {
   }
   if (!actor?.is_active || !["founder", "owner"].includes(actor.role)) return reply({ error: "เฉพาะผู้ก่อตั้งหรือเจ้าของจัดการผู้ใช้ได้" }, 403);
 
+  // Owners must not be able to discover the Founder row through this API.
+  const targetQuery = fields => {
+    let query = admin.from("staff").select(fields);
+    if (actor.role === "owner") query = query.neq("role", "founder");
+    return query;
+  };
+
   let input;
   try { input = await request.json(); } catch { return reply({ error: "ข้อมูลคำขอไม่ถูกต้อง" }, 400); }
   if (!input || typeof input !== "object" || Array.isArray(input)) return reply({ error: "ข้อมูลคำขอไม่ถูกต้อง" }, 400);
 
   if (input.action === "list") {
-    const { data, error } = await admin.from("staff")
-      .select("user_id,email,name,role,is_active,created_at").order("created_at", { ascending: true });
+    let query = admin.from("staff").select("user_id,email,name,role,is_active,created_at");
+    if (actor.role === "owner") query = query.neq("role", "founder");
+    const { data, error } = await query.order("created_at", { ascending: true });
     if (error) {
       console.error("list staff failed", error);
       return reply({ error: "โหลดรายชื่อผู้ใช้ไม่สำเร็จ" }, 500);
@@ -82,7 +90,12 @@ Deno.serve(async request => {
       .select("user_id,email,name,role,is_active,created_at").single();
     if (insertError) {
       console.error("auth user created but staff insert failed", insertError);
-      return reply({ error: "สร้างบัญชีแล้ว แต่บันทึกสิทธิ์ไม่สำเร็จ ติดต่อผู้ดูแลฐานข้อมูล" }, 500);
+      const { error: cleanupError } = await admin.auth.admin.deleteUser(createdAuth.user.id);
+      if (cleanupError) {
+        console.error("created auth user cleanup failed", cleanupError);
+        return reply({ error: "สร้างบัญชีไม่สมบูรณ์ ติดต่อผู้ดูแลฐานข้อมูล" }, 500);
+      }
+      return reply({ error: "สร้างบัญชีไม่สำเร็จ กรุณาลองอีกครั้ง" }, 500);
     }
     return reply({ user: created }, 201);
   }
@@ -90,8 +103,8 @@ Deno.serve(async request => {
   if (input.action === "set_password") {
     if (typeof input.user_id !== "string" || !validUuid(input.user_id)) return reply({ error: "รหัสผู้ใช้ไม่ถูกต้อง" }, 400);
     if (!validPassword(input.password)) return reply({ error: "รหัสผ่านต้องมี 8–128 ตัวอักษร" }, 400);
-    const { data: target, error: targetError } = await admin.from("staff")
-      .select("user_id,email,role").eq("user_id", input.user_id).maybeSingle();
+    const { data: target, error: targetError } = await targetQuery("user_id,email,role")
+      .eq("user_id", input.user_id).maybeSingle();
     if (targetError) {
       console.error("password target lookup failed", targetError);
       return reply({ error: "ตรวจบัญชีเป้าหมายไม่สำเร็จ" }, 500);
@@ -110,8 +123,8 @@ Deno.serve(async request => {
 
   if (input.action === "update") {
     if (typeof input.user_id !== "string" || !validUuid(input.user_id)) return reply({ error: "รหัสผู้ใช้ไม่ถูกต้อง" }, 400);
-    const { data: target, error: targetError } = await admin.from("staff")
-      .select("user_id,role").eq("user_id", input.user_id).maybeSingle();
+    const { data: target, error: targetError } = await targetQuery("user_id,role")
+      .eq("user_id", input.user_id).maybeSingle();
     if (targetError) {
       console.error("target lookup failed", targetError);
       return reply({ error: "ตรวจบัญชีเป้าหมายไม่สำเร็จ" }, 500);

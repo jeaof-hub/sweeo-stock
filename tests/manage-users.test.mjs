@@ -11,13 +11,14 @@ function makeFunction() {
     { user_id: "11111111-1111-4111-8111-111111111111", email: "warehouse@example.com", name: "Warehouse", role: "warehouse", is_active: true, created_at: "2026-09-24" },
     { user_id: "33333333-3333-4333-8333-333333333333", email: "owner@example.com", name: "Owner", role: "owner", is_active: true, created_at: "2026-09-24" },
   ];
-  let creates = 0, passwordChanges = 0, createdAuthOptions, handler;
+  let creates = 0, passwordChanges = 0, deletes = 0, createdAuthOptions, handler;
   const builder = () => {
     let rowFilter = () => true;
     let patch;
     const chain = {
       select() { return chain; },
       eq(field, value) { const before = rowFilter; rowFilter = row => before(row) && row[field] === value; return chain; },
+      neq(field, value) { const before = rowFilter; rowFilter = row => before(row) && row[field] !== value; return chain; },
       order() { return Promise.resolve({ data: staff.filter(rowFilter), error: null }); },
       maybeSingle() { return Promise.resolve({ data: staff.find(rowFilter) || null, error: null }); },
       update(value) { patch = value; return chain; },
@@ -32,6 +33,7 @@ function makeFunction() {
       admin: {
         createUser: async options => { creates++; createdAuthOptions = options; return { data: { user: { id: "22222222-2222-4222-8222-222222222222" } }, error: null }; },
         updateUserById: async () => { passwordChanges++; return { data: {}, error: null }; },
+        deleteUser: async () => { deletes++; return { data: {}, error: null }; },
       },
     },
     from: () => builder(),
@@ -42,10 +44,10 @@ function makeFunction() {
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const response = await handler(new Request("https://example.supabase.co/functions/v1/manage-users", { method: "POST", headers, body: JSON.stringify(body) }));
     return { status: response.status, body: await response.json() };
-  }, staff, get creates() { return creates; }, get passwordChanges() { return passwordChanges; }, get createdAuthOptions() { return createdAuthOptions; } };
+  }, staff, get creates() { return creates; }, get passwordChanges() { return passwordChanges; }, get deletes() { return deletes; }, get createdAuthOptions() { return createdAuthOptions; } };
 }
 
-test("requires a verified active Founder before any user operation", async () => {
+test("requires a verified active Founder or Owner before any user operation", async () => {
   const fn = makeFunction();
   assert.equal((await fn.call(null, { action: "list" })).status, 401);
   assert.equal((await fn.call("bad-token", { action: "list" })).status, 401);
@@ -59,8 +61,8 @@ test("cannot create or modify Founder through the web API", async () => {
   const fn = makeFunction();
   assert.equal((await fn.call("founder-token", { action: "create", email: "next@example.com", name: "Next", role: "founder", password: "LongPassword1!" })).status, 400);
   assert.equal((await fn.call("founder-token", { action: "update", user_id: fn.staff[0].user_id, role: "auditor" })).status, 403);
-  assert.equal((await fn.call("owner-token", { action: "update", user_id: fn.staff[0].user_id, role: "auditor" })).status, 403);
-  assert.equal((await fn.call("owner-token", { action: "set_password", user_id: fn.staff[0].user_id, password: "AnotherPassword1!" })).status, 403);
+  assert.equal((await fn.call("owner-token", { action: "update", user_id: fn.staff[0].user_id, role: "auditor" })).status, 404);
+  assert.equal((await fn.call("owner-token", { action: "set_password", user_id: fn.staff[0].user_id, password: "AnotherPassword1!" })).status, 404);
   assert.equal((await fn.call("founder-token", { action: "set_password", user_id: fn.staff[0].user_id, password: "AnotherPassword1!" })).status, 403);
   assert.equal(fn.staff[0].role, "founder");
   assert.equal(fn.creates, 0);
@@ -100,9 +102,18 @@ test("Founder may grant Admin and Owner access but cannot grant Founder access",
 
 test("Owner manages non-Founder accounts and cannot create Founder", async () => {
   const fn = makeFunction();
-  assert.equal((await fn.call("owner-token", { action: "list" })).status, 200);
+  const listed = await fn.call("owner-token", { action: "list" });
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.users.some(user => user.role === "founder"), false);
   assert.equal((await fn.call("owner-token", { action: "create", email: "auditor@example.com", name: "Auditor", role: "auditor", password: "LongPassword1!" })).status, 201);
   assert.equal((await fn.call("owner-token", { action: "update", user_id: fn.staff[1].user_id, role: "admin" })).status, 200);
   assert.equal((await fn.call("owner-token", { action: "set_password", user_id: fn.staff[1].user_id, password: "AnotherPassword1!" })).status, 200);
   assert.equal((await fn.call("owner-token", { action: "create", email: "another@example.com", name: "Another", role: "founder", password: "LongPassword1!" })).status, 400);
+});
+
+test("Founder list includes the immutable Founder account", async () => {
+  const fn = makeFunction();
+  const listed = await fn.call("founder-token", { action: "list" });
+  assert.equal(listed.status, 200);
+  assert.equal(listed.body.users.filter(user => user.role === "founder").length, 1);
 });

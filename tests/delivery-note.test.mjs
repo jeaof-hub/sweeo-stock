@@ -18,7 +18,19 @@ test("approved delivery note uses approved quantity and creates original plus co
   assert.match(html, />40<\/td>/);
   assert.doesNotMatch(html, />50<\/td>/);
   assert.equal((html.match(/class="delivery-page"/g)||[]).length,2);
+  assert.equal((html.match(/<tbody>/g)||[]).length,2);
+  assert.equal((html.match(/class="item-row(?: blank-row)?"/g)||[]).length,20);
+  assert.equal((html.match(/class="item-row blank-row"/g)||[]).length,18);
   assert.match(html,/ต้นฉบับ/); assert.match(html,/สำเนา/); assert.match(html,/TD-20260925-00001/);
+  assert.match(html,/footer\{position:absolute;[^}]*bottom:2mm/);
+});
+
+test("more than ten products continue on numbered pages with ten rows each", () => {
+  const lines=Array.from({length:11},(_,index)=>({ ...base.lines[0], item_id:`item-${index+1}` }));
+  const html=buildDocument({ ...base, lines });
+  assert.equal((html.match(/class="delivery-page"/g)||[]).length,4);
+  assert.equal((html.match(/class="item-row(?: blank-row)?"/g)||[]).length,40);
+  assert.match(html,/ต้นฉบับ · 2\/2/); assert.match(html,/สำเนา · 2\/2/);
 });
 
 test("pending delivery note uses requested quantity and is visibly marked draft", () => {

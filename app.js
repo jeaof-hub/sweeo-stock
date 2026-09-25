@@ -379,10 +379,15 @@
       if (mode === "member" && rop) {
         const pct = Math.max(0, Math.min(1, c.bal / (rop * 2))) * 100;
         const col = c.status === "red" ? "var(--red)" : c.status === "amber" ? "var(--amber)" : "var(--green)";
-        g = `<div class="gauge" aria-hidden="true"><div class="track"><div class="fill" style="width:${pct}%;background:${col}"></div><div class="rop"></div></div><div class="legend"><span>0</span><span>จุดสั่ง ${fmt(rop)}</span><span>${fmt(rop * 2)}+</span></div></div>`;
+        const trackColor = c.bal <= 0 ? "var(--red-soft)" : "var(--track)";
+        g = `<div class="gauge" aria-hidden="true"><div class="track" style="background:${trackColor}"><div class="fill" style="width:${pct}%;background:${col}"></div><div class="rop"></div></div><div class="legend"><span>0</span><span>จุดสั่ง ${fmt(rop)}</span><span>${fmt(rop * 2)}+</span></div></div>`;
       } else {
         const pct = Math.max(0, Math.min(1, c.bal / stockScale)) * 100;
-        g = `<div class="gauge" aria-hidden="true"><div class="track"><div class="fill" style="width:${pct}%;background:var(--brand)"></div></div><div class="legend"><span>0</span><span>สเกลคงเหลือ ${fmt(stockScale)}+</span></div></div>`;
+        // These colors compare public balances with the public display scale,
+        // never with the reorder point that visitors cannot read.
+        const stockColor = pct <= 25 ? "var(--red)" : pct <= 60 ? "var(--amber)" : "var(--green)";
+        const trackColor = c.bal <= 0 ? "var(--red-soft)" : "var(--track)";
+        g = `<div class="gauge" aria-hidden="true"><div class="track" style="background:${trackColor}"><div class="fill" style="width:${pct}%;background:${stockColor}"></div></div><div class="legend"><span>0</span><span>สเกลคงเหลือ ${fmt(stockScale)}+</span></div></div>`;
       }
       return `<button type="button" class="item" data-id="${esc(id)}"><div class="model">${esc(itemName(it))}</div>
         <div class="qty"><b class="${c.bal < 0 ? "neg" : ""}">${fmt(c.bal)}</b><small>คงเหลือ</small></div>

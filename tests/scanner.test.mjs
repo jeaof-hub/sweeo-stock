@@ -9,11 +9,16 @@ const products = [
 ];
 
 const realLabelProducts = [
+  { id: "r012", code: "5991301098T", model: "LFM-KitN3528", dept: "Retail" },
+  { id: "r011", code: "5991301121T", model: "LFM-KitN3528-L", dept: "Retail" },
   { id: "r046", code: "5991301242T", model: "LSA-T8C090628-G", dept: "Retail" },
   { id: "r047", code: "5991301252T", model: "LSA-T8C090628-GS", dept: "Retail" },
   { id: "r176", code: "5991600048T", model: "LHC-TTG01-100-65", dept: "Retail" },
   { id: "r177", code: "5991600050T", model: "LHC-TTG01-200-40", dept: "Retail" },
-  { id: "r178", code: "5991600051T", model: "LHC-TTG01-200-65", dept: "Retail" }
+  { id: "r178", code: "5991600051T", model: "LHC-TTG01-200-65", dept: "Retail" },
+  { id: "r346", code: "---1600016T", model: "LOZ-FGD100H5-2304090", dept: "SPARE" },
+  { id: "r350", code: "---1600017T", model: "LOF-FLG-FB3-50-40120", dept: "SPARE" },
+  { id: "r368", code: "---1600019T", model: "LGH-TFD-240-2655090", dept: "SPARE" }
 ];
 
 test("matches a real non-599 product code exactly", () => {
@@ -81,6 +86,34 @@ test("two incomplete fuzzy values rank r046 first but require operator confirmat
 });
 
 test("a numeric lot and carton quantity produce no real-label candidates", () => {
+  const result = scanner.matchProducts("LOT 2605060001 Q'TY 30 PCS", realLabelProducts);
+  assert.equal(result.match, null);
+  assert.deepEqual(result.candidates, []);
+});
+
+test("the longer exact LSA sibling wins for model-only OCR", () => {
+  const result = scanner.matchProducts("LSA-T8C090628-GS", realLabelProducts);
+  assert.equal(result.match?.id, "r047");
+  assert.equal(result.candidates[0].product.id, "r047");
+});
+
+test("the longer exact LSA sibling wins when model and code are both present", () => {
+  assert.equal(scanner.matchProducts("LSA-T8C090628-GS 5991301252T", realLabelProducts).match?.id, "r047");
+});
+
+test("the shorter exact LSA model still matches with its unique code", () => {
+  assert.equal(scanner.matchProducts("LSA-T8C090628-G 5991301242T", realLabelProducts).match?.id, "r046");
+});
+
+test("the longer Kit sibling wins with its unique code", () => {
+  assert.equal(scanner.matchProducts("LFM-KitN3528-L 5991301121T", realLabelProducts).match?.id, "r011");
+});
+
+test("the shorter Kit model is not shadowed by the longer sibling", () => {
+  assert.equal(scanner.matchProducts("LFM-KitN3528", realLabelProducts).match?.id, "r012");
+});
+
+test("lot digits do not fuzzy-match numeric suffixes in real SPARE models", () => {
   const result = scanner.matchProducts("LOT 2605060001 Q'TY 30 PCS", realLabelProducts);
   assert.equal(result.match, null);
   assert.deepEqual(result.candidates, []);

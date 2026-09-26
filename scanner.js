@@ -27,9 +27,12 @@
   }
 
   function tokensFrom(text) {
-    const tokens = String(text || "").toUpperCase().split(/[^A-Z0-9-]+/).map(compact).filter(t => t.length >= 4);
-    const joined = compact(text);
-    if (joined.length >= 4) tokens.push(joined);
+    const raw = String(text || "").toUpperCase();
+    const tokens = raw.split(/[^A-Z0-9-]+/).map(compact).filter(t => t.length >= 4 && !/^\d+$/.test(t));
+    for (const line of raw.split(/[\r\n]+/)) {
+      const joined = compact(line);
+      if (joined.length >= 4 && /[A-Z]/.test(joined)) tokens.push(joined);
+    }
     return [...new Set(tokens)];
   }
 
@@ -63,16 +66,19 @@
       const code = compact(product.code), model = compact(product.model);
       const exactCode = !!code && tokens.some(t => t === code || (code.length >= 7 && t.includes(code)));
       const exactModel = !!model && tokens.some(t => t === model || (model.length >= 7 && t.includes(model)));
+      const exactTier = Number(exactCode) + Number(exactModel);
       let score = Math.max(codeScore, modelScore);
       if (codeScore >= 0.72 && modelScore >= 0.72) score = Math.min(1, score + 0.08);
       if (preferredDept(product.dept)) score = Math.min(1, score + 0.015);
-      return { product, score, codeScore, modelScore, exactCode, exactModel };
-    }).filter(x => x.score >= 0.68).sort((a, b) => b.score - a.score || Number(preferredDept(b.product.dept)) - Number(preferredDept(a.product.dept)) || String(a.product.id).localeCompare(String(b.product.id)));
+      if (!exactTier) score = Math.min(0.989, score);
+      return { product, score, codeScore, modelScore, exactCode, exactModel, exactTier };
+    }).filter(x => x.score >= 0.68).sort((a, b) => b.exactTier - a.exactTier || b.score - a.score || Number(preferredDept(b.product.dept)) - Number(preferredDept(a.product.dept)) || String(a.product.id).localeCompare(String(b.product.id)));
 
     const top = ranked[0], second = ranked[1];
     const exactIdentity = top && (top.exactCode || top.exactModel);
-    const sameExact = exactIdentity && ranked.filter(x => (top.exactCode && x.exactCode) || (top.exactModel && x.exactModel)).length > 1;
-    const clear = !!top && !sameExact && ((exactIdentity && (!second || top.score - second.score >= 0.01)) || (top.score >= 0.88 && (!second || top.score - second.score >= 0.08)));
+    const anotherExact = exactIdentity && ranked.slice(1).some(x => x.exactCode || x.exactModel);
+    const strongFuzzyPair = top && !exactIdentity && top.codeScore >= 0.90 && top.modelScore >= 0.93 && (!second || top.score - second.score >= 0.08);
+    const clear = !!top && ((exactIdentity && !anotherExact) || strongFuzzyPair);
     return { match: clear ? top.product : null, candidates: ranked.slice(0, 3), tokens, cartonQty: extractCartonQuantity(text) };
   }
 

@@ -649,7 +649,18 @@
 
   /* ---------- entry form ---------- */
   let formKind = "out";
-  let scannerStream = null, scannerWorker = null, scannerTimer = null, scannerBusy = false, scannerTorchOn = false, scannerResolved = false;
+  let scannerStream = null, scannerWorker = null, scannerTimer = null, scannerBusy = false, scannerTorchOn = false, scannerResolved = false, tesseractPromise = null;
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (tesseractPromise) return tesseractPromise;
+    tesseractPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+      script.async = true; script.onload = () => resolve(window.Tesseract); script.onerror = () => reject(new Error("OCR_UNAVAILABLE"));
+      document.head.appendChild(script);
+    }).catch(err => { tesseractPromise = null; throw err; });
+    return tesseractPromise;
+  }
   const scannerProducts = () => [...items.values()].map(it => ({ id: it.id, code: it.code || "", model: it.model || "", dept: it.dept || "" }));
   function scannerLineFor(itemId) {
     const existing = [...$("eLines").children].find(line => line.dataset.item === String(itemId));
@@ -676,9 +687,10 @@
   }
   async function getScannerWorker() {
     if (scannerWorker) return scannerWorker;
-    if (!window.Tesseract) throw new Error("OCR_UNAVAILABLE");
     $("scannerStatus").textContent = "กำลังเตรียมระบบอ่านรหัส ครั้งแรกอาจใช้เวลาสักครู่";
-    scannerWorker = await window.Tesseract.createWorker("eng", 1);
+    const Tesseract = await loadTesseract();
+    if (!Tesseract) throw new Error("OCR_UNAVAILABLE");
+    scannerWorker = await Tesseract.createWorker("eng", 1);
     await scannerWorker.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' ", tessedit_pageseg_mode: "6" });
     return scannerWorker;
   }

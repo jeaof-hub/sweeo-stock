@@ -102,7 +102,7 @@ from auth.users where email = 'founder@example.com';
 5. สำหรับฐานข้อมูลที่สร้างก่อนแก้สิทธิ์นี้ ให้รัน `supabase/05_manage_users_permissions.sql` ใน SQL Editor เพื่อให้ `service_role` เข้าถึง `staff` ได้; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
 6. สำหรับฐานข้อมูลเดิมที่เคยมีบทบาท `staff` ให้รัน `supabase/06_fix_role_constraint.sql` เพื่อให้รับบทบาท Editor / Viewer; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีข้อจำกัดที่ถูกต้องแล้ว
 7. สำหรับฐานข้อมูลที่สร้างก่อนสิทธิ์ Viewer แบบอ่านภายใน ให้รัน `supabase/07_viewer_read_access.sql`; ฐานข้อมูลใหม่ที่ใช้ `01_schema.sql` ล่าสุดมีสิทธิ์นี้แล้ว
-8. รัน migration `08` ถึง `16` ตามลำดับเลข โดย Production ที่ผ่าน migration ก่อนหน้าแล้วให้รันเฉพาะเลขที่ยังไม่ได้รัน
+8. รัน migration `08` ถึง `16` ตามลำดับเลข โดย Production ที่ผ่าน migration ก่อนหน้าแล้วให้รันเฉพาะเลขที่ยังไม่ได้รัน ส่วน migration `17` เป็นการแก้ข้อมูลรหัสสินค้าจากไฟล์ที่เจ้าของตรวจแล้ว ใช้เฉพาะฐานข้อมูล SWEEO ชุดนี้
 9. Deploy `manage-users` และ `login-username` จากโฟลเดอร์ `supabase/functions/` โดยปิด **Verify JWT with legacy secret** สำหรับทั้งสองฟังก์ชัน; `manage-users` ตรวจ JWT และบทบาทเอง ส่วน `login-username` ต้องรับคำขอก่อนล็อกอินและมี rate limit ที่ฐานข้อมูล
 10. ผู้ก่อตั้งหรือเจ้าของเข้าสู่ระบบเว็บ กด **บัญชี → จัดการผู้ใช้** เพื่อสร้างสมาชิก กำหนด Username สิทธิ์ และรหัสผ่านเริ่มต้น ไม่มีอีเมลเชิญ
 

@@ -360,6 +360,7 @@ create trigger movements_audit after insert or update or delete on public.moveme
 for each row execute function public.audit_stock_change();
 
 commit;
+
 -- Rename Manager/Sales and grant Owner all Founder privileges except managing Founder.
 begin;
 
@@ -1109,3 +1110,7 @@ revoke all on function public.create_dispatch_request(date,date,text,text,text,t
 grant execute on function public.create_dispatch_request(date,date,text,text,text,text,text,jsonb),public.update_dispatch_request(uuid,date,date,text,text,text,text,text,jsonb) to authenticated;
 
 commit;
+
+-- Migration 17_product_code_cleanup.sql is intentionally excluded from this
+-- fresh-install reference because it updates ten reviewed IDs in one specific
+-- production dataset. Apply it only to the SWEEO database it was prepared for.

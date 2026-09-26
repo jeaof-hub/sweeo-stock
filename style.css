@@ -221,6 +221,9 @@ body.scanner-open{overflow:hidden}
 .request-lines{display:grid;gap:6px}.request-lines label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
 .request-lines label:last-child{border-bottom:none}.request-lines small{color:var(--muted)}
 .approve-qty{width:110px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-align:right}
+.invoice-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.invoice-summary small,.invoice-summary b{display:block}.invoice-summary small{color:var(--muted)}.invoice-summary b{font-size:1.8rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.invoice-card.cancelled{opacity:.68}.invoice-pick-title{margin-top:18px}.invoice-group{border:1px solid var(--line);border-radius:12px;margin:10px 0;padding:8px 12px}.invoice-group legend{padding:0 6px;font-weight:600;font-size:.88rem}.invoice-group label{display:flex;gap:8px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid var(--line)}.invoice-group label:last-child{border-bottom:0}.invoice-group input{margin-top:5px}
 
 /* Phase 3: compact responsive workflow */
 .filter-toggle{display:none;margin:10px 0 0;width:100%}

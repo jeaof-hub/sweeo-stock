@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=phase-5-1">
+<link rel="stylesheet" href="style.css?v=phase-6a-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -42,6 +42,7 @@
       <button class="tab" role="tab" id="tabLog" aria-selected="false" type="button">ประวัติรับเข้า/ส่งออก</button>
       <button class="tab" role="tab" id="tabPending" aria-selected="false" type="button" hidden>รออนุมัติ <span id="pendingBadge"></span></button>
       <button class="tab" role="tab" id="tabMine" aria-selected="false" type="button" hidden>คำขอของฉัน</button>
+      <button class="tab" role="tab" id="tabInvoices" aria-selected="false" type="button" hidden>INV <span id="invoiceBadge"></span></button>
       <button class="tab" role="tab" id="tabAudit" aria-selected="false" type="button" hidden>รายการที่ถูกลบ</button>
       <button class="tab" role="tab" id="tabChanges" aria-selected="false" type="button" hidden>บันทึกการเปลี่ยนแปลง</button>
     </div>
@@ -92,6 +93,12 @@
 
   <section id="viewPending" hidden><div class="count"><span id="pendingCount"></span></div><div id="pendingList"></div></section>
   <section id="viewMine" hidden><div class="count"><span id="mineCount"></span></div><div id="mineList"></div></section>
+  <section id="viewInvoices" hidden>
+    <div class="invoice-summary"><div><small>รายการรอเปิด INV</small><b id="invoiceWaitingCount">0</b></div><button class="btn primary" id="newInvoiceBtn" type="button">บันทึก INV</button></div>
+    <h2 class="view-title">รอเปิด INV</h2><div id="invoiceWaiting"></div>
+    <h2 class="view-title">รายการ INV</h2><div id="invoiceList"></div>
+    <h2 class="view-title">รายการที่ไม่ต้องเปิด INV</h2><div id="noInvoiceList"></div>
+  </section>
 
   <section id="viewChanges" hidden>
     <h2 class="view-title">บันทึกการเปลี่ยนแปลง</h2>
@@ -177,7 +184,7 @@
     <div class="grid">
       <div class="f"><label for="eDate">วันที่</label><input type="date" id="eDate" required></div>
       <div class="f"><label for="eDeliveryDate">วันที่ส่งของ</label><input type="date" id="eDeliveryDate" required></div>
-      <div class="f"><label for="eInv" id="eInvL">เลขที่ INV / เอกสาร</label><input id="eInv" autocomplete="off"></div>
+      <div class="f" id="eDocField"><label for="eInv" id="eInvL">เลขที่เอกสารรับเข้า</label><input id="eInv" autocomplete="off"></div>
       <div class="f full"><label for="eCust" id="eCustL">ลูกค้า</label><input id="eCust" list="custList" autocomplete="off"></div>
       <div class="f"><label for="eDept">แผนก / ประเภทงาน</label><input id="eDept" list="deptList" autocomplete="off"></div>
       <div class="f"><label for="eSale">เซลส์</label><input id="eSale" list="saleList" autocomplete="off"></div>
@@ -186,6 +193,20 @@
     </details>
   </div>
   <div class="dlg-foot"><span class="msg" id="eMsg"></span><button class="btn primary" type="button" id="eSave">ตรวจสอบรายการ</button></div>
+</div></dialog>
+
+<dialog id="dInvoice" aria-labelledby="invTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="invTitle">บันทึก INV</h2><p>ผูกรายการที่ส่งของแล้วกับ INV จาก ERP</p></div><button class="btn x" type="button" data-close>ยกเลิก</button></div>
+  <div class="dlg-body">
+    <div class="grid">
+      <div class="f"><label for="invNo">เลขที่ INV</label><input id="invNo" autocomplete="off" maxlength="150"></div>
+      <div class="f"><label for="invDate">วันที่ INV</label><input id="invDate" type="date"></div>
+      <div class="f full"><label for="invCustomer">ลูกค้า</label><input id="invCustomer" list="invoiceCustomerList" autocomplete="off"></div>
+    </div>
+    <p class="banner" id="invCustomerWarning" hidden>ลูกค้าใน INV ต่างจากใบส่งของที่เลือก กรุณาตรวจสอบก่อนบันทึก</p>
+    <h3 class="invoice-pick-title">เลือกรายการจากใบส่งของ</h3><div id="invoicePicker"></div>
+  </div>
+  <div class="dlg-foot"><span class="msg" id="invMsg"></span><button class="btn primary" id="invSave" type="button">บันทึก INV</button></div>
 </div></dialog>
 
 <section class="scanner" id="scanner" role="dialog" aria-modal="true" aria-labelledby="scannerTitle" hidden>
@@ -250,10 +271,11 @@
 
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
+<datalist id="invoiceCustomerList"></datalist>
 
-<script src="i18n.js?v=phase-5-1"></script>
+<script src="i18n.js?v=phase-6a-1"></script>
 <script src="delivery-note.js?v=phase-3b-3"></script>
 <script src="scanner.js?v=phase-5-3"></script>
-<script src="app.js?v=phase-5-2"></script>
+<script src="app.js?v=phase-6a-1"></script>
 </body>
 </html>

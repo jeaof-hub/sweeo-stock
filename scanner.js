@@ -33,6 +33,12 @@
     return [...new Set(tokens)];
   }
 
+  function extractCartonQuantity(text) {
+    const match = String(text || "").toUpperCase().match(/Q\s*['’]?\s*T\s*Y\s*[:=]?\s*(\d{1,4})\s*(?:PCS?)?/);
+    const quantity = match ? Number(match[1]) : 0;
+    return Number.isInteger(quantity) && quantity > 0 ? quantity : null;
+  }
+
   function bestSimilarity(target, tokens) {
     const wanted = compact(target);
     if (!wanted) return 0;
@@ -67,8 +73,8 @@
     const exactIdentity = top && (top.exactCode || top.exactModel);
     const sameExact = exactIdentity && ranked.filter(x => (top.exactCode && x.exactCode) || (top.exactModel && x.exactModel)).length > 1;
     const clear = !!top && !sameExact && ((exactIdentity && (!second || top.score - second.score >= 0.01)) || (top.score >= 0.88 && (!second || top.score - second.score >= 0.08)));
-    return { match: clear ? top.product : null, candidates: ranked.slice(0, 3), tokens };
+    return { match: clear ? top.product : null, candidates: ranked.slice(0, 3), tokens, cartonQty: extractCartonQuantity(text) };
   }
 
-  return { compact, editDistance, matchProducts };
+  return { compact, editDistance, extractCartonQuantity, matchProducts };
 });

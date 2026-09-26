@@ -31,6 +31,12 @@ test("does not confuse a lot number or carton quantity with a product", () => {
   assert.equal(result.candidates.length, 0);
 });
 
+test("extracts the carton quantity as a hint without using it as a product code", () => {
+  const result = scanner.matchProducts("ELG-150-36A Q'TY: 30 PCS LOT 2605060001", products);
+  assert.equal(result.match?.id, "elg");
+  assert.equal(result.cartonQty, 30);
+});
+
 test("duplicate exact codes require the operator to choose", () => {
   const duplicated = [...products, { id: "dup", code: "1196G30301T", model: "ELG-SPARE", dept: "Retail" }];
   const result = scanner.matchProducts("1196G30301T", duplicated);

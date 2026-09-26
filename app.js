@@ -649,7 +649,7 @@
 
   /* ---------- entry form ---------- */
   let formKind = "out";
-  let scannerStream = null, scannerWorker = null, scannerTimer = null, scannerBusy = false, scannerTorchOn = false;
+  let scannerStream = null, scannerWorker = null, scannerTimer = null, scannerBusy = false, scannerTorchOn = false, scannerResolved = false;
   const scannerProducts = () => [...items.values()].map(it => ({ id: it.id, code: it.code || "", model: it.model || "", dept: it.dept || "" }));
   function scannerLineFor(itemId) {
     const existing = [...$("eLines").children].find(line => line.dataset.item === String(itemId));
@@ -657,18 +657,21 @@
     const empty = [...$("eLines").children].find(line => !line.dataset.item && !line.querySelector(".picker input").value.trim() && !line.querySelector(".qtyin").value);
     return empty || addLine();
   }
-  function acceptScannedItem(itemId) {
+  function acceptScannedItem(itemId, cartonQty) {
     const line = scannerLineFor(itemId);
     pick(line, String(itemId));
+    if (cartonQty) line.dataset.cartonQty = cartonQty;
+    updateLineInfo(line);
+    scannerResolved = true; clearTimeout(scannerTimer);
     $("scannerFrame").classList.add("found");
     if (navigator.vibrate) navigator.vibrate(80);
-    stopScanner();
-    setTimeout(() => { line.scrollIntoView({ behavior: "smooth", block: "center" }); line.querySelector(".qtyin").focus(); }, 80);
+    $("scanProduct").textContent = "สแกนรุ่นถัดไป";
+    setTimeout(() => { stopScanner(); line.scrollIntoView({ behavior: "smooth", block: "center" }); line.querySelector(".qtyin").focus(); }, 280);
   }
   function showScannerCandidates(result) {
     const box = $("scannerResults");
     if (!result.candidates.length) { box.hidden = true; return; }
-    box.innerHTML = `<p>พบข้อมูลใกล้เคียง กรุณาเลือกสินค้า</p>${result.candidates.map(c => `<button type="button" data-item="${esc(c.product.id)}"><b>${esc(itemName(items.get(String(c.product.id))))}</b><small>${esc(c.product.code || "ไม่มีรหัส")} · ${esc(c.product.dept || "ไม่ระบุแผนก")}</small></button>`).join("")}`;
+    box.innerHTML = `<p>พบข้อมูลใกล้เคียง กรุณาเลือกสินค้า</p>${result.candidates.map(c => `<button type="button" data-item="${esc(c.product.id)}"${result.cartonQty ? ` data-carton="${result.cartonQty}"` : ""}><b>${esc(itemName(items.get(String(c.product.id))))}</b><small>${esc(c.product.code || "ไม่มีรหัส")} · ${esc(c.product.dept || "ไม่ระบุแผนก")}</small></button>`).join("")}`;
     box.hidden = false;
   }
   async function getScannerWorker() {
@@ -697,19 +700,19 @@
       $("scannerStatus").textContent = "กำลังอ่านรหัสสินค้าและชื่อรุ่น…";
       const { data } = await worker.recognize(scannerCrop());
       const result = window.SWEEO_SCANNER.matchProducts(data.text || "", scannerProducts());
-      if (result.match) { acceptScannedItem(result.match.id); return; }
+      if (result.match) { acceptScannedItem(result.match.id, result.cartonQty); return; }
       showScannerCandidates(result);
       $("scannerStatus").textContent = result.candidates.length ? "ยังไม่ชัดเจน เลือกสินค้าด้านล่างหรือเล็งกล้องใหม่" : "ยังไม่พบรหัสสินค้า ลองขยับฉลากให้อยู่ในกรอบ";
     } catch (err) {
       $("scannerStatus").textContent = err.message === "OCR_UNAVAILABLE" ? "โหลดระบบอ่านรหัสไม่สำเร็จ กรุณาพิมพ์รหัสเอง" : "อ่านภาพไม่สำเร็จ กำลังลองใหม่";
     } finally {
       scannerBusy = false;
-      if (scannerStream && !$("scanner").hidden) scannerTimer = setTimeout(scanFrame, 700);
+      if (!scannerResolved && scannerStream && !$("scanner").hidden) scannerTimer = setTimeout(scanFrame, 700);
     }
   }
   async function openScanner() {
     if (!window.SWEEO_SCANNER || !navigator.mediaDevices?.getUserMedia) { toast("อุปกรณ์นี้ไม่รองรับกล้อง กรุณาพิมพ์รหัสเอง"); return; }
-    $("scannerResults").hidden = true; $("scannerResults").innerHTML = ""; $("scannerFrame").classList.remove("found");
+    scannerResolved = false; $("scannerResults").hidden = true; $("scannerResults").innerHTML = ""; $("scannerFrame").classList.remove("found");
     $("scannerStatus").textContent = "กำลังเปิดกล้อง…"; $("scanner").hidden = false; document.body.classList.add("scanner-open");
     try {
       scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
@@ -732,7 +735,7 @@
   document.addEventListener("visibilitychange", () => { if (document.hidden && scannerStream) stopScanner(); });
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("scanner").hidden) stopScanner(); });
   $("scannerManual").onclick = () => { stopScanner(); const line = [...$("eLines").children].find(x => !x.dataset.item) || addLine(); line.querySelector(".picker input").focus(); };
-  $("scannerResults").onclick = e => { const button = e.target.closest("button[data-item]"); if (button) acceptScannedItem(button.dataset.item); };
+  $("scannerResults").onclick = e => { const button = e.target.closest("button[data-item]"); if (button) acceptScannedItem(button.dataset.item, Number(button.dataset.carton) || null); };
   $("scannerTorch").onclick = async () => {
     const track = scannerStream?.getVideoTracks()[0]; if (!track) return;
     scannerTorchOn = !scannerTorchOn;
@@ -758,7 +761,7 @@
     if (!id) { sel.innerHTML = ""; return; }
     const it = items.get(id), c = calc.get(id), q = Number(line.querySelector(".qtyin").value) || 0;
     const available = c.bal - (pendingByItem.get(id) || 0);
-    let t = `${esc(it.code || "")} คงเหลือ <b>${fmt(c.bal)}</b>${formKind === "out" ? ` · พร้อมเบิก <b>${fmt(available)}</b>` : ""}`;
+    let t = `${esc(it.code || "")} คงเหลือ <b>${fmt(c.bal)}</b>${formKind === "out" ? ` · พร้อมเบิก <b>${fmt(available)}</b>` : ""}${line.dataset.cartonQty ? ` · ลังละ <b>${fmt(Number(line.dataset.cartonQty))}</b>` : ""}`;
     if (formKind === "out" && q > 0) t += q > available ? `  <span class="warn">ขอเกินยอดพร้อมเบิก</span>` : `  หลังอนุมัติ <b>${fmt(available - q)}</b>`;
     if (formKind === "in" && q > 0) t += `  หลังรับเข้า <b>${fmt(c.bal + q)}</b>`;
     sel.innerHTML = t;
@@ -800,7 +803,7 @@
     $("eInvL").textContent = kind === "out" ? "เลขที่ INV / เอกสาร" : "เลขที่เอกสารรับเข้า";
     $("eDate").value = today(); $("eDeliveryDate").value = today(); $("eInv").value = ""; $("eNote").value = ""; $("eDept").value = ""; $("eMsg").textContent = "";
     $("eCust").value = kind === "in" ? "STOCK IN" : "";
-    $("eSave").textContent = "ตรวจสอบรายการ"; $("eMore").open = false;
+    $("eSave").textContent = "ตรวจสอบรายการ"; $("scanProduct").textContent = "สแกนรหัสสินค้า"; $("eMore").open = false;
     $("eLines").innerHTML = ""; addLine(itemId);
     openDlg($("dEntry"));
     setTimeout(() => { const i = $("eLines").querySelector(itemId ? ".qtyin" : ".picker input"); if (i) i.focus(); }, 50);

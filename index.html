@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=phase-3b-1">
+<link rel="stylesheet" href="style.css?v=phase-5-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -171,7 +171,7 @@
   <div class="dlg-head"><div><h2 id="eTitle"></h2><p id="eSub"></p></div><button class="btn x" type="button" data-close>ยกเลิก</button></div>
   <div class="dlg-body">
     <div class="lines" id="eLines"></div>
-    <button class="btn" type="button" id="addLine" style="margin-top:10px">เพิ่มสินค้าอีกรายการ</button>
+    <div class="entry-tools"><button class="btn scan-btn" type="button" id="scanProduct">สแกนรหัสสินค้า</button><button class="btn" type="button" id="addLine">เพิ่มสินค้าอีกรายการ</button></div>
     <details class="more-fields" id="eMore">
       <summary>รายละเอียดเอกสาร</summary>
     <div class="grid">
@@ -187,6 +187,22 @@
   </div>
   <div class="dlg-foot"><span class="msg" id="eMsg"></span><button class="btn primary" type="button" id="eSave">ตรวจสอบรายการ</button></div>
 </div></dialog>
+
+<section class="scanner" id="scanner" role="dialog" aria-modal="true" aria-labelledby="scannerTitle" hidden>
+  <video id="scannerVideo" playsinline muted></video>
+  <div class="scanner-shade">
+    <div class="scanner-top"><button class="scanner-close" id="scannerClose" type="button" aria-label="ปิดกล้อง">×</button><h2 id="scannerTitle">สแกนรหัสสินค้า</h2><span></span></div>
+    <div class="scanner-center">
+      <div class="scanner-frame" id="scannerFrame"><span></span><span></span><span></span><span></span></div>
+      <p id="scannerStatus">วางรหัสสินค้าหรือชื่อรุ่นให้อยู่ในกรอบ</p>
+      <div class="scanner-results" id="scannerResults" hidden></div>
+    </div>
+    <div class="scanner-actions">
+      <button type="button" id="scannerTorch">เปิดไฟฉาย</button>
+      <button type="button" id="scannerManual">พิมพ์รหัสเอง</button>
+    </div>
+  </div>
+</section>
 
 <dialog id="dEntryReview" aria-labelledby="erTitle"><div class="dlg">
   <div class="dlg-head"><div><h2 id="erTitle">ตรวจสอบก่อนยืนยัน</h2><p id="erMode"></p></div><button class="btn x" type="button" id="erBack">กลับไปแก้ไข</button></div>
@@ -235,8 +251,10 @@
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 
-<script src="i18n.js?v=phase-3b-1"></script>
+<script src="i18n.js?v=phase-5-1"></script>
 <script src="delivery-note.js?v=phase-3b-3"></script>
-<script src="app.js?v=phase-3b-3"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="scanner.js?v=phase-5-1"></script>
+<script src="app.js?v=phase-5-1"></script>
 </body>
 </html>

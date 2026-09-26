@@ -649,6 +649,96 @@
 
   /* ---------- entry form ---------- */
   let formKind = "out";
+  let scannerStream = null, scannerWorker = null, scannerTimer = null, scannerBusy = false, scannerTorchOn = false;
+  const scannerProducts = () => [...items.values()].map(it => ({ id: it.id, code: it.code || "", model: it.model || "", dept: it.dept || "" }));
+  function scannerLineFor(itemId) {
+    const existing = [...$("eLines").children].find(line => line.dataset.item === String(itemId));
+    if (existing) return existing;
+    const empty = [...$("eLines").children].find(line => !line.dataset.item && !line.querySelector(".picker input").value.trim() && !line.querySelector(".qtyin").value);
+    return empty || addLine();
+  }
+  function acceptScannedItem(itemId) {
+    const line = scannerLineFor(itemId);
+    pick(line, String(itemId));
+    $("scannerFrame").classList.add("found");
+    if (navigator.vibrate) navigator.vibrate(80);
+    stopScanner();
+    setTimeout(() => { line.scrollIntoView({ behavior: "smooth", block: "center" }); line.querySelector(".qtyin").focus(); }, 80);
+  }
+  function showScannerCandidates(result) {
+    const box = $("scannerResults");
+    if (!result.candidates.length) { box.hidden = true; return; }
+    box.innerHTML = `<p>พบข้อมูลใกล้เคียง กรุณาเลือกสินค้า</p>${result.candidates.map(c => `<button type="button" data-item="${esc(c.product.id)}"><b>${esc(itemName(items.get(String(c.product.id))))}</b><small>${esc(c.product.code || "ไม่มีรหัส")} · ${esc(c.product.dept || "ไม่ระบุแผนก")}</small></button>`).join("")}`;
+    box.hidden = false;
+  }
+  async function getScannerWorker() {
+    if (scannerWorker) return scannerWorker;
+    if (!window.Tesseract) throw new Error("OCR_UNAVAILABLE");
+    $("scannerStatus").textContent = "กำลังเตรียมระบบอ่านรหัส ครั้งแรกอาจใช้เวลาสักครู่";
+    scannerWorker = await window.Tesseract.createWorker("eng", 1);
+    await scannerWorker.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' ", tessedit_pageseg_mode: "6" });
+    return scannerWorker;
+  }
+  function scannerCrop() {
+    const video = $("scannerVideo"), canvas = document.createElement("canvas");
+    let sw = Math.round(video.videoWidth * .88), sh = Math.round(sw / 2.25);
+    if (sh > video.videoHeight * .58) { sh = Math.round(video.videoHeight * .58); sw = Math.round(sh * 2.25); }
+    const sx = Math.round((video.videoWidth - sw) / 2), sy = Math.round((video.videoHeight - sh) / 2);
+    canvas.width = Math.min(sw, 1400); canvas.height = Math.round(sh * canvas.width / sw);
+    canvas.getContext("2d", { willReadFrequently: true }).drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+  async function scanFrame() {
+    if (!scannerStream || scannerBusy || $("scanner").hidden) return;
+    scannerBusy = true;
+    try {
+      const worker = await getScannerWorker();
+      if (!scannerStream || $("scanner").hidden) return;
+      $("scannerStatus").textContent = "กำลังอ่านรหัสสินค้าและชื่อรุ่น…";
+      const { data } = await worker.recognize(scannerCrop());
+      const result = window.SWEEO_SCANNER.matchProducts(data.text || "", scannerProducts());
+      if (result.match) { acceptScannedItem(result.match.id); return; }
+      showScannerCandidates(result);
+      $("scannerStatus").textContent = result.candidates.length ? "ยังไม่ชัดเจน เลือกสินค้าด้านล่างหรือเล็งกล้องใหม่" : "ยังไม่พบรหัสสินค้า ลองขยับฉลากให้อยู่ในกรอบ";
+    } catch (err) {
+      $("scannerStatus").textContent = err.message === "OCR_UNAVAILABLE" ? "โหลดระบบอ่านรหัสไม่สำเร็จ กรุณาพิมพ์รหัสเอง" : "อ่านภาพไม่สำเร็จ กำลังลองใหม่";
+    } finally {
+      scannerBusy = false;
+      if (scannerStream && !$("scanner").hidden) scannerTimer = setTimeout(scanFrame, 700);
+    }
+  }
+  async function openScanner() {
+    if (!window.SWEEO_SCANNER || !navigator.mediaDevices?.getUserMedia) { toast("อุปกรณ์นี้ไม่รองรับกล้อง กรุณาพิมพ์รหัสเอง"); return; }
+    $("scannerResults").hidden = true; $("scannerResults").innerHTML = ""; $("scannerFrame").classList.remove("found");
+    $("scannerStatus").textContent = "กำลังเปิดกล้อง…"; $("scanner").hidden = false; document.body.classList.add("scanner-open");
+    try {
+      scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      $("scannerVideo").srcObject = scannerStream; await $("scannerVideo").play();
+      const caps = scannerStream.getVideoTracks()[0]?.getCapabilities?.() || {};
+      $("scannerTorch").hidden = !caps.torch; scannerTorchOn = false; $("scannerTorch").classList.remove("on"); $("scannerTorch").textContent = "เปิดไฟฉาย";
+      scanFrame();
+    } catch (_) {
+      $("scannerStatus").textContent = "เปิดกล้องไม่ได้ กรุณาอนุญาตใช้กล้องหรือพิมพ์รหัสเอง";
+    }
+  }
+  function stopScanner() {
+    clearTimeout(scannerTimer); scannerTimer = null;
+    if (scannerStream) scannerStream.getTracks().forEach(track => track.stop());
+    scannerStream = null; $("scannerVideo").srcObject = null; $("scanner").hidden = true; document.body.classList.remove("scanner-open");
+  }
+  $("scanProduct").onclick = openScanner;
+  $("scannerClose").onclick = stopScanner;
+  window.addEventListener("pagehide", stopScanner);
+  document.addEventListener("visibilitychange", () => { if (document.hidden && scannerStream) stopScanner(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("scanner").hidden) stopScanner(); });
+  $("scannerManual").onclick = () => { stopScanner(); const line = [...$("eLines").children].find(x => !x.dataset.item) || addLine(); line.querySelector(".picker input").focus(); };
+  $("scannerResults").onclick = e => { const button = e.target.closest("button[data-item]"); if (button) acceptScannedItem(button.dataset.item); };
+  $("scannerTorch").onclick = async () => {
+    const track = scannerStream?.getVideoTracks()[0]; if (!track) return;
+    scannerTorchOn = !scannerTorchOn;
+    try { await track.applyConstraints({ advanced: [{ torch: scannerTorchOn }] }); $("scannerTorch").classList.toggle("on", scannerTorchOn); $("scannerTorch").textContent = scannerTorchOn ? "ปิดไฟฉาย" : "เปิดไฟฉาย"; }
+    catch (_) { scannerTorchOn = false; $("scannerTorch").textContent = "อุปกรณ์ไม่รองรับไฟฉาย"; }
+  };
   function addLine(itemId) {
     const w = document.createElement("div");
     w.innerHTML = `<div class="line"><div class="picker"><input type="text" placeholder="ค้นหารุ่นหรือรหัสสินค้า" autocomplete="off" aria-label="สินค้า"><div class="sel"></div><div class="sugg" hidden></div></div>

@@ -326,3 +326,7 @@ dialog{box-shadow:0 24px 80px rgba(0,0,0,.2)}
   .item{padding:14px}.filters{margin-bottom:12px}
 }
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
+
+/* Use locally available Traditional Chinese fonts without another download. */
+:root[lang="zh-TW"] body{font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif}
+.lang-switch{max-width:120px;cursor:pointer}

@@ -1,10 +1,12 @@
 /* Interface translations only. Product names and stock records keep their stored values. */
 (() => {
   "use strict";
-  const lang = localStorage.getItem("sweeo-language") === "en" ? "en" : "th";
+  const savedLang = localStorage.getItem("sweeo-language");
+  const lang = ["th", "en", "zh-TW"].includes(savedLang) ? savedLang : "th";
   window.SWEEO_I18N = { lang };
   document.documentElement.lang = lang;
   if (lang === "en") document.title = "SWEEO Stock";
+  if (lang === "zh-TW") document.title = "SWEEO 庫存管理";
 
   const english = {
     "สต็อกสินค้า SWEEO": "SWEEO Stock",
@@ -122,13 +124,17 @@
   function translate(value) {
     const raw = String(value);
     const trimmed = raw.trim();
-    if (!trimmed || !/[ก-๙]/.test(trimmed)) return raw;
-    let result = english[trimmed];
+    if (lang === "th" || !trimmed || !/[ก-๙]/.test(trimmed)) return raw;
+    const dictionary = lang === "zh-TW" ? window.SWEEO_ZH_TW : english;
+    let result = dictionary[trimmed];
     if (!result) {
-      for (const [pattern, replacement] of dynamic) {
+      for (const [pattern, replacement] of (lang === "zh-TW" ? window.SWEEO_ZH_TW_DYNAMIC : dynamic)) {
         const match = trimmed.match(pattern);
         if (match) { result = trimmed.replace(pattern, replacement); break; }
       }
+    }
+    if (!result && lang === "zh-TW" && / [·|] /.test(trimmed)) {
+      result = trimmed.split(/( [·|] )/).map(part => / [·|] /.test(part) ? part : translate(part)).join("");
     }
     if (!result) return raw;
     return raw.replace(trimmed, result);
@@ -153,14 +159,15 @@
   }
 
   const button = document.getElementById("langSwitch");
-  button.textContent = lang === "en" ? "ไทย" : "EN";
-  button.setAttribute("aria-label", lang === "en" ? "เปลี่ยนเป็นภาษาไทย" : "Switch to English");
-  button.title = button.getAttribute("aria-label");
-  button.addEventListener("click", () => {
-    localStorage.setItem("sweeo-language", lang === "en" ? "th" : "en");
+  button.value = lang;
+  const languageLabel = { th: "เลือกภาษา", en: "Language", "zh-TW": "選擇語言" }[lang];
+  button.setAttribute("aria-label", languageLabel);
+  button.title = languageLabel;
+  button.addEventListener("change", () => {
+    localStorage.setItem("sweeo-language", button.value);
     location.reload();
   });
-  if (lang === "en") {
+  if (lang !== "th") {
     walk(document.body);
     new MutationObserver(mutations => {
       for (const change of mutations) {

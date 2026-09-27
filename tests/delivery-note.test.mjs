@@ -46,3 +46,12 @@ test("document values are HTML escaped", () => {
   assert.doesNotMatch(html,/<script>alert\(1\)<\/script>/);
   assert.match(html,/&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
 });
+
+test("Taiwan delivery notes localize headings and signatures while preserving source data", () => {
+  const html=buildDocument({...base,lang:"zh-TW",purposeNames:{sale:"銷售"}});
+  assert.match(html,/<html lang="zh-TW">/);
+  for(const label of ['臨時出庫／送貨單','正本','副本','收貨人簽名','銷售'])assert.ok(html.includes(label));
+  for(const value of ['Triple P','LRM-KitW2228','5991301118T','INV-1'])assert.ok(html.includes(value));
+  assert.match(html,/>40<\/td>/);
+  assert.equal((html.match(/class="item-row(?: blank-row)?"/g)||[]).length,20);
+});

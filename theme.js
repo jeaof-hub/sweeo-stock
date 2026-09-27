@@ -8,9 +8,9 @@
     const button = document.getElementById("themeSwitch");
     function updateButton() {
       const dark = document.documentElement.dataset.theme === "dark";
-      const en = document.documentElement.lang === "en";
+      const lang = document.documentElement.lang;
       button.setAttribute("aria-pressed", String(dark));
-      button.setAttribute("aria-label", en ? (dark ? "Light mode" : "Dark mode") : (dark ? "โหมดสว่าง" : "โหมดมืด"));
+      button.setAttribute("aria-label", lang === "zh-TW" ? (dark ? "淺色模式" : "深色模式") : lang === "en" ? (dark ? "Light mode" : "Dark mode") : (dark ? "โหมดสว่าง" : "โหมดมืด"));
       button.title = button.getAttribute("aria-label");
     }
     button.addEventListener("click", () => {

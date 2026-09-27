@@ -9,7 +9,8 @@
   "use strict";
   const $ = id => document.getElementById(id);
   const nf = new Intl.NumberFormat("en-US");
-  const locale = window.SWEEO_I18N?.lang === "en" ? "en-GB" : "th-TH";
+  const locale = ({ en: "en-GB", "zh-TW": "zh-TW" })[window.SWEEO_I18N?.lang] || "th-TH";
+  const t = text => window.SWEEO_I18N?.translate(text) ?? text;
   const fmt = n => (n === null || n === undefined || isNaN(n)) ? "–" : nf.format(Math.round(n * 10) / 10);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
   const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
@@ -357,7 +358,7 @@
     const role = row.querySelector(".user-role").value;
     const is_active = row.querySelector(".user-active").value === "true";
     const username = row.querySelector(".user-username").value.trim();
-    if (user.is_active && !is_active && !window.confirm(`ปิดการใช้งาน ${user.email}?`)) return;
+    if (user.is_active && !is_active && !window.confirm(t(`ปิดการใช้งาน ${user.email}?`))) return;
     button.disabled = true; $("uMsg").textContent = "";
     try {
       const result = await userAdmin("update", { user_id: user.user_id, username, role, is_active });
@@ -544,10 +545,10 @@
         if (inputs.some((i, index) => !Number.isInteger(lines[index].qty) || lines[index].qty < 1 || lines[index].qty > Number(i.dataset.requested))) throw new Error("จำนวนอนุมัติต้องเป็นจำนวนเต็มและไม่เกินจำนวนที่ขอ");
         const { error } = await sb.rpc("approve_dispatch_request", { p_request_id: id, p_lines: lines }); if (error) throw error;
       } else if (action === "reject") {
-        const reason = window.prompt("ระบุเหตุผลที่ปฏิเสธ"); if (reason === null) return;
+        const reason = window.prompt(t("ระบุเหตุผลที่ปฏิเสธ")); if (reason === null) return;
         const { error } = await sb.rpc("reject_dispatch_request", { p_request_id: id, p_reason: reason }); if (error) throw error;
       } else if (action === "cancel") {
-        if (!window.confirm("ยกเลิกคำขอนี้?")) return;
+        if (!window.confirm(t("ยกเลิกคำขอนี้?"))) return;
         const { error } = await sb.rpc("cancel_dispatch_request", { p_request_id: id }); if (error) throw error;
       } else if (action === "edit") { openRequestEdit(id); return; }
       else if (action === "delivery") { openDeliveryNote(id); return; }
@@ -594,7 +595,7 @@
   $("newInvoiceBtn").onclick=()=>openInvoiceForm();
   $("invCustomer").addEventListener("input",()=>{if($("invoicePicker").querySelector('input:checked'))updateInvoiceCustomerWarning();else renderInvoicePicker();}); $("invoicePicker").addEventListener("change",updateInvoiceCustomerWarning);
   $("invSave").onclick=async()=>{if(!canManageInvoices())return;const id=$("dInvoice").dataset.invoiceId,lines=[...$("invoicePicker").querySelectorAll('input:checked')].map(x=>x.value);$("invMsg").textContent="";$("invSave").disabled=true;try{let error;if(id){({error}=await sb.rpc("update_invoice",{p_invoice_id:id,p_inv_no:$("invNo").value,p_inv_date:$("invDate").value,p_customer:$("invCustomer").value}));if(!error&&lines.length)({error}=await sb.rpc("attach_invoice_lines",{p_invoice_id:id,p_line_ids:lines}));}else{if(!lines.length)throw new Error("เลือกรายการอย่างน้อยหนึ่งรายการ");({error}=await sb.rpc("create_invoice",{p_inv_no:$("invNo").value,p_inv_date:$("invDate").value,p_customer:$("invCustomer").value,p_line_ids:lines}));}if(error)throw error;$("dInvoice").close();toast("บันทึก INV แล้ว");await reload();setTab("invoices");}catch(error){$("invMsg").textContent=dbErr(error);}finally{$("invSave").disabled=false;}};
-  $("viewInvoices").addEventListener("click",async e=>{const newBtn=e.target.closest("[data-new-invoice-request]"),edit=e.target.closest("[data-edit-invoice]"),detach=e.target.closest("[data-detach-invoice]"),cancel=e.target.closest("[data-cancel-invoice]"),noInv=e.target.closest("[data-no-invoice]"),clearNoInv=e.target.closest("[data-clear-no-invoice]");if(newBtn)return openInvoiceForm(null,newBtn.dataset.newInvoiceRequest);if(edit)return openInvoiceForm(edit.dataset.editInvoice);try{if(detach){if(!confirm("ถอดรายการนี้ออกจาก INV?"))return;const{error}=await sb.rpc("detach_invoice_line",{p_line_id:detach.dataset.detachInvoice});if(error)throw error;}else if(cancel){if(!confirm("ยกเลิก INV และคืนทุกรายการเป็นรอ INV?"))return;const{error}=await sb.rpc("cancel_invoice",{p_invoice_id:cancel.dataset.cancelInvoice});if(error)throw error;}else if(noInv){const reason=prompt("เหตุผลที่ไม่ต้องเปิด INV");if(reason===null)return;const{error}=await sb.rpc("mark_line_no_invoice",{p_line_id:noInv.dataset.noInvoice,p_reason:reason});if(error)throw error;}else if(clearNoInv){if(!confirm("เปลี่ยนรายการนี้กลับเป็นรอ INV?"))return;const{error}=await sb.rpc("clear_line_no_invoice",{p_line_id:clearNoInv.dataset.clearNoInvoice});if(error)throw error;}else return;await reload();renderInvoices();}catch(error){toast(dbErr(error));}});
+  $("viewInvoices").addEventListener("click",async e=>{const newBtn=e.target.closest("[data-new-invoice-request]"),edit=e.target.closest("[data-edit-invoice]"),detach=e.target.closest("[data-detach-invoice]"),cancel=e.target.closest("[data-cancel-invoice]"),noInv=e.target.closest("[data-no-invoice]"),clearNoInv=e.target.closest("[data-clear-no-invoice]");if(newBtn)return openInvoiceForm(null,newBtn.dataset.newInvoiceRequest);if(edit)return openInvoiceForm(edit.dataset.editInvoice);try{if(detach){if(!confirm(t("ถอดรายการนี้ออกจาก INV?")))return;const{error}=await sb.rpc("detach_invoice_line",{p_line_id:detach.dataset.detachInvoice});if(error)throw error;}else if(cancel){if(!confirm(t("ยกเลิก INV และคืนทุกรายการเป็นรอ INV?")))return;const{error}=await sb.rpc("cancel_invoice",{p_invoice_id:cancel.dataset.cancelInvoice});if(error)throw error;}else if(noInv){const reason=prompt(t("เหตุผลที่ไม่ต้องเปิด INV"));if(reason===null)return;const{error}=await sb.rpc("mark_line_no_invoice",{p_line_id:noInv.dataset.noInvoice,p_reason:reason});if(error)throw error;}else if(clearNoInv){if(!confirm(t("เปลี่ยนรายการนี้กลับเป็นรอ INV?")))return;const{error}=await sb.rpc("clear_line_no_invoice",{p_line_id:clearNoInv.dataset.clearNoInvoice});if(error)throw error;}else return;await reload();renderInvoices();}catch(error){toast(dbErr(error));}});
 
   function renderAudit() {
     if (!canManageStock()) return;
@@ -936,7 +937,7 @@
   }
 
   function deliveryDocumentHtml(request) {
-    const purposeNames = window.SWEEO_I18N?.lang === "en" ? { sale:"Sale", gift:"Gift", claim:"Claim", other:"Other" } : purposeLabel;
+    const purposeNames = Object.fromEntries(Object.entries(purposeLabel).map(([key,value]) => [key,t(value)]));
     return window.SWEEO_DELIVERY.buildDocument({
       request, lines: requestLines(request.id), itemById: id => items.get(id), staffNames,
       purposeNames, lang: window.SWEEO_I18N?.lang || "th",
@@ -1043,11 +1044,13 @@
     $("menuPop").hidden = true;
     if (typeof XLSX === "undefined") { toast("โหลดตัวสร้างไฟล์ Excel ไม่สำเร็จ"); return; }
     const its = [...items.entries()].sort((a, b) => (a[1].sort_order || 0) - (b[1].sort_order || 0));
-    const s1 = [locale === "en-GB"
+    const s1 = [locale === "zh-TW"
+      ? ["序號", "LED 類別", "部門", "商品編號", "型號", "規格", "期初庫存", "入庫", "出庫", "庫存餘額", "儲位", "備註", "平均月銷量", "生產補貨點（ROP）", "狀態"]
+      : locale === "en-GB"
       ? ["No.", "LED types", "Department", "Lot No.", "Model No.", "Specifications", "Opening balance", "STOCK IN", "SOLD", "BALANCE", "Location", "Remark", "Average sales/month", "Reorder point (ROP)", "Status"]
       : ["No.", "LED types", "Department", "Lot No.", "Model No.", "Specifications", "ยอดยกมา", "STOCK IN", "SOLD", "BALANCE", "Location", "Remark", "ขายเฉลี่ย/เดือน", "จุดสั่งผลิต (ROP)", "สถานะ"]];
-    its.forEach(([id, it], i) => { const c = calc.get(id); s1.push([i + 1, it.type, it.dept, it.code, it.model, it.spec, Number(it.opening) || 0, c.inQ, c.out, c.bal, it.loc, it.remark, it.avg_month, it.rop, c.status ? (locale === "en-GB" ? window.SWEEO_I18N.translate(statusLabel[c.status]) : statusLabel[c.status]) : ""]); });
-    const s2 = [["Date", "Customer / Source", "INV No.", "Department", "Sale", "Model name", "Model No.", "Quantity (out)", "STOCK IN", "Note", "Recorded by"]];
+    its.forEach(([id, it], i) => { const c = calc.get(id); s1.push([i + 1, it.type, it.dept, it.code, it.model, it.spec, Number(it.opening) || 0, c.inQ, c.out, c.bal, it.loc, it.remark, it.avg_month, it.rop, c.status ? t(statusLabel[c.status]) : ""]); });
+    const s2 = [locale === "zh-TW" ? ["日期", "客戶／來源", "INV 編號", "部門", "業務人員", "型號", "商品編號", "出庫數量", "入庫數量", "備註", "登錄人員"] : ["Date", "Customer / Source", "INV No.", "Department", "Sale", "Model name", "Model No.", "Quantity (out)", "STOCK IN", "Note", "Recorded by"]];
     [...entries].sort(olderFirst).forEach(e => {
       const it = items.get(e.item_id);
       s2.push([e.date || "", e.customer, e.doc_no, e.dept, e.sale, it ? (it.model || e.model) : e.model, it ? (it.code || e.code) : e.code, e.kind === "out" ? e.qty : "", e.kind === "in" ? e.qty : "", e.note, recorderLabel(e.created_by, e.source)]);

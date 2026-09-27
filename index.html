@@ -1,14 +1,16 @@
 <!doctype html>
-<html lang="th">
+<html lang="th" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>สต็อกสินค้า SWEEO</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💡</text></svg>">
+<link rel="icon" type="image/png" href="assets/sweeo-logo.png">
+<meta name="theme-color" content="#F78325">
+<script src="theme.js?v=brand-1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=phase-6a-1">
+<link rel="stylesheet" href="style.css?v=brand-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -17,9 +19,10 @@
 <div class="wrap">
   <header class="top">
     <div class="bar">
-      <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="var(--brand-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg></div>
-      <div class="title"><h1>สต็อกสินค้า SWEEO</h1><p id="status">กำลังโหลดข้อมูล</p></div>
+      <a class="brand-logo" href="https://www.sweeo.com/" target="_blank" rel="noopener noreferrer" aria-label="เว็บไซต์บริษัท SWEEO"><img src="assets/sweeo-logo.png" alt="SWEEO" width="280" height="68"></a>
+      <div class="title"><span class="brand-caption" lang="en">INVENTORY</span><h1>สต็อกสินค้า SWEEO</h1><p id="status">กำลังโหลดข้อมูล</p></div>
       <div class="who">
+        <button class="btn theme-switch" id="themeSwitch" type="button" aria-label="โหมดมืด" title="โหมดมืด" aria-pressed="false"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14a8 8 0 0 1-10-10A8.5 8.5 0 1 0 20 14Z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
         <button class="btn lang-switch" id="langSwitch" type="button" aria-label="Switch to English" title="Switch to English">EN</button>
         <span class="badge" id="roleBadge">ผู้เยี่ยมชม</span>
         <button class="btn" id="loginBtn" type="button">เข้าสู่ระบบ</button>
@@ -273,7 +276,7 @@
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 <datalist id="invoiceCustomerList"></datalist>
 
-<script src="i18n.js?v=phase-6a-1"></script>
+<script src="i18n.js?v=brand-1"></script>
 <script src="delivery-note.js?v=phase-3b-3"></script>
 <script src="scanner.js?v=phase-5-3"></script>
 <script src="app.js?v=phase-6a-1"></script>

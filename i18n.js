@@ -9,6 +9,7 @@
   const english = {
     "สต็อกสินค้า SWEEO": "SWEEO Stock",
     "กำลังโหลดข้อมูล": "Loading stock",
+    "โหมดมืด": "Dark mode", "โหมดสว่าง": "Light mode", "เว็บไซต์บริษัท SWEEO": "SWEEO company website",
     "ผู้เยี่ยมชม": "Visitor", "ผู้ตรวจสอบ": "Auditor", "คลังสินค้า": "Warehouse", "แอดมิน": "Admin", "เจ้าของ": "Owner", "ผู้ก่อตั้ง": "Founder",
     "เข้าสู่ระบบ": "Sign in", "บัญชี": "Account", "ส่งออก Excel": "Export Excel", "จัดการผู้ใช้": "Manage users", "เปลี่ยนรหัสผ่าน": "Change password", "ออกจากระบบ": "Sign out",
     "ชื่อผู้ใช้": "Username", "ชื่อผู้ใช้หรืออีเมล": "Username or email", "ชื่อผู้ใช้ (3–32 ตัวอักษรอังกฤษ/ตัวเลข)": "Username (3–32 Latin letters/numbers)", "ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง": "Incorrect username/email or password",

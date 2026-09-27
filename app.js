@@ -66,7 +66,7 @@
   }
   const openDlg = d => { if (d.showModal) { if (!d.open) d.showModal(); } else d.setAttribute("open", ""); };
   document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
-  document.querySelectorAll("dialog").forEach(d => {
+  document.querySelectorAll("dialog:not(#scanner)").forEach(d => {
     let backdropPointer = null;
     d.addEventListener("pointerdown", e => {
       backdropPointer = e.target === d ? e.pointerId : null;
@@ -713,7 +713,10 @@
 
   /* ---------- entry form ---------- */
   let formKind = "out";
-  let scannerStream = null, scannerWorker = null, scannerTimer = null, scannerBusy = false, scannerTorchOn = false, scannerResolved = false, tesseractPromise = null;
+  let scannerSession = null, scannerWorkerPromise = null, tesseractPromise = null;
+  let scannerHistoryId = null, scannerHistoryPending = null, resolveScannerHistory = null;
+  let scannerSequence = 0;
+  const scannerActive = run => !!run && scannerSession === run && $("scanner").open && $("dEntry").open;
   function loadTesseract() {
     if (window.Tesseract) return Promise.resolve(window.Tesseract);
     if (tesseractPromise) return tesseractPromise;
@@ -732,16 +735,27 @@
     const empty = [...$("eLines").children].find(line => !line.dataset.item && !line.querySelector(".picker input").value.trim() && !line.querySelector(".qtyin").value);
     return empty || addLine();
   }
-  function acceptScannedItem(itemId, cartonQty) {
+  function acceptScannedItem(itemId, cartonQty, run = scannerSession) {
+    // A result from an earlier camera session must never mutate a new/closed form.
+    if (!$("dEntry").open) { stopScanner(); return; }
+    if (!scannerActive(run) || run.resolved || !items.has(String(itemId))) return;
+    run.resolved = true;
+    clearTimeout(run.timer);
     const line = scannerLineFor(itemId);
     pick(line, String(itemId));
     if (cartonQty) line.dataset.cartonQty = cartonQty;
     updateLineInfo(line);
-    scannerResolved = true; clearTimeout(scannerTimer);
     $("scannerFrame").classList.add("found");
     if (navigator.vibrate) navigator.vibrate(80);
     $("scanProduct").textContent = "สแกนรุ่นถัดไป";
-    setTimeout(() => { stopScanner(); line.scrollIntoView({ behavior: "smooth", block: "center" }); line.querySelector(".qtyin").focus(); }, 280);
+    run.returnTimer = setTimeout(() => {
+      if (!scannerActive(run)) return;
+      stopScanner();
+      if ($("dEntry").open && line.isConnected) {
+        line.scrollIntoView({ behavior: "smooth", block: "center" });
+        line.querySelector(".qtyin").focus();
+      }
+    }, 280);
   }
   function showScannerCandidates(result) {
     const box = $("scannerResults");
@@ -749,14 +763,20 @@
     box.innerHTML = `<p>พบข้อมูลใกล้เคียง กรุณาเลือกสินค้า</p>${result.candidates.map(c => `<button type="button" data-item="${esc(c.product.id)}"${result.cartonQty ? ` data-carton="${result.cartonQty}"` : ""}><b>${esc(itemName(items.get(String(c.product.id))))}</b><small>${esc(c.product.code || "ไม่มีรหัส")} · ${esc(c.product.dept || "ไม่ระบุแผนก")}</small></button>`).join("")}`;
     box.hidden = false;
   }
-  async function getScannerWorker() {
-    if (scannerWorker) return scannerWorker;
-    $("scannerStatus").textContent = "กำลังเตรียมระบบอ่านรหัส ครั้งแรกอาจใช้เวลาสักครู่";
-    const Tesseract = await loadTesseract();
-    if (!Tesseract) throw new Error("OCR_UNAVAILABLE");
-    scannerWorker = await Tesseract.createWorker("eng", 1);
-    await scannerWorker.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' ", tessedit_pageseg_mode: "6" });
-    return scannerWorker;
+  function getScannerWorker() {
+    // Share initialization across quick close/reopen cycles, as well as the worker.
+    if (!scannerWorkerPromise) {
+      scannerWorkerPromise = (async () => {
+        const Tesseract = await loadTesseract();
+        if (!Tesseract) throw new Error("OCR_UNAVAILABLE");
+        const worker = await Tesseract.createWorker("eng", 1);
+        try {
+          await worker.setParameters({ tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-' ", tessedit_pageseg_mode: "6" });
+          return worker;
+        } catch (error) { await worker.terminate(); throw error; }
+      })().catch(error => { scannerWorkerPromise = null; throw error; });
+    }
+    return scannerWorkerPromise;
   }
   function scannerCrop() {
     const video = $("scannerVideo"), canvas = document.createElement("canvas");
@@ -767,56 +787,120 @@
     canvas.getContext("2d", { willReadFrequently: true }).drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
-  async function scanFrame() {
-    if (!scannerStream || scannerBusy || $("scanner").hidden) return;
-    scannerBusy = true;
+  async function scanFrame(run) {
+    if (!scannerActive(run) || !run.stream || run.busy || run.resolved) return;
+    run.busy = true;
     try {
+      $("scannerStatus").textContent = "กำลังเตรียมระบบอ่านรหัส ครั้งแรกอาจใช้เวลาสักครู่";
       const worker = await getScannerWorker();
-      if (!scannerStream || $("scanner").hidden) return;
+      if (!scannerActive(run)) return;
       $("scannerStatus").textContent = "กำลังอ่านรหัสสินค้าและชื่อรุ่น…";
       const { data } = await worker.recognize(scannerCrop());
+      if (!scannerActive(run) || run.resolved) return;
       const result = window.SWEEO_SCANNER.matchProducts(data.text || "", scannerProducts());
-      if (result.match) { acceptScannedItem(result.match.id, result.cartonQty); return; }
+      if (result.match) { acceptScannedItem(result.match.id, result.cartonQty, run); return; }
       showScannerCandidates(result);
       $("scannerStatus").textContent = result.candidates.length ? "ยังไม่ชัดเจน เลือกสินค้าด้านล่างหรือเล็งกล้องใหม่" : "ยังไม่พบรหัสสินค้า ลองขยับฉลากให้อยู่ในกรอบ";
     } catch (err) {
-      $("scannerStatus").textContent = err.message === "OCR_UNAVAILABLE" ? "โหลดระบบอ่านรหัสไม่สำเร็จ กรุณาพิมพ์รหัสเอง" : "อ่านภาพไม่สำเร็จ กำลังลองใหม่";
+      if (scannerActive(run)) $("scannerStatus").textContent = err.message === "OCR_UNAVAILABLE" ? "โหลดระบบอ่านรหัสไม่สำเร็จ กรุณาพิมพ์รหัสเอง" : "อ่านภาพไม่สำเร็จ กำลังลองใหม่";
     } finally {
-      scannerBusy = false;
-      if (!scannerResolved && scannerStream && !$("scanner").hidden) scannerTimer = setTimeout(scanFrame, 700);
+      run.busy = false;
+      if (scannerActive(run) && !run.resolved && run.stream) run.timer = setTimeout(() => scanFrame(run), 700);
     }
   }
   async function openScanner() {
+    if (!$("dEntry").open || scannerSession) return;
+    // Wait for the previous scanner-only history entry to be removed.
+    if (scannerHistoryPending) await scannerHistoryPending;
+    if (!$("dEntry").open || scannerSession) return;
     if (!window.SWEEO_SCANNER || !navigator.mediaDevices?.getUserMedia) { toast("อุปกรณ์นี้ไม่รองรับกล้อง กรุณาพิมพ์รหัสเอง"); return; }
-    scannerResolved = false; $("scannerResults").hidden = true; $("scannerResults").innerHTML = ""; $("scannerFrame").classList.remove("found");
-    $("scannerStatus").textContent = "กำลังเปิดกล้อง…"; $("scanner").hidden = false; document.body.classList.add("scanner-open");
+    const run = { id: ++scannerSequence, stream: null, busy: false, resolved: false, torch: false, timer: null, returnTimer: null };
+    scannerSession = run;
+    $("scannerResults").hidden = true; $("scannerResults").innerHTML = ""; $("scannerFrame").classList.remove("found");
+    $("scannerStatus").textContent = "กำลังเปิดกล้อง…";
+    $("scannerTorch").hidden = true; $("scannerTorch").disabled = false; $("scannerTorch").classList.remove("on"); $("scannerTorch").textContent = "เปิดไฟฉาย";
+    // showModal puts the camera above dEntry in the browser's top layer.
+    $("scanner").showModal();
+    document.body.classList.add("scanner-open");
     try {
-      scannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-      $("scannerVideo").srcObject = scannerStream; await $("scannerVideo").play();
-      const caps = scannerStream.getVideoTracks()[0]?.getCapabilities?.() || {};
-      $("scannerTorch").hidden = !caps.torch; scannerTorchOn = false; $("scannerTorch").classList.remove("on"); $("scannerTorch").textContent = "เปิดไฟฉาย";
-      scanFrame();
+      scannerHistoryId = `scanner-${Date.now()}-${run.id}`;
+      history.pushState({ ...history.state, sweeoScanner: scannerHistoryId }, "");
+    } catch (_) { scannerHistoryId = null; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      if (!scannerActive(run)) { stream.getTracks().forEach(track => track.stop()); return; }
+      run.stream = stream;
+      $("scannerVideo").srcObject = stream; await $("scannerVideo").play();
+      if (!scannerActive(run)) return;
+      const caps = stream.getVideoTracks()[0]?.getCapabilities?.() || {};
+      $("scannerTorch").hidden = !caps.torch;
+      scanFrame(run);
     } catch (_) {
+      if (!scannerActive(run)) return;
+      run.stream?.getTracks().forEach(track => track.stop()); run.stream = null;
+      $("scannerVideo").srcObject = null;
       $("scannerStatus").textContent = "เปิดกล้องไม่ได้ กรุณาอนุญาตใช้กล้องหรือพิมพ์รหัสเอง";
     }
   }
-  function stopScanner() {
-    clearTimeout(scannerTimer); scannerTimer = null;
-    if (scannerStream) scannerStream.getTracks().forEach(track => track.stop());
-    scannerStream = null; $("scannerVideo").srcObject = null; $("scanner").hidden = true; document.body.classList.remove("scanner-open");
+  function stopScanner({ fromHistory = false, leavingPage = false } = {}) {
+    const run = scannerSession;
+    scannerSession = null; // Invalidate getUserMedia, worker and OCR continuations first.
+    if (run) {
+      clearTimeout(run.timer); clearTimeout(run.returnTimer);
+      run.stream?.getTracks().forEach(track => track.stop());
+      run.stream = null;
+    }
+    $("scannerVideo").pause(); $("scannerVideo").srcObject = null;
+    if ($("scanner").open) $("scanner").close();
+    document.body.classList.remove("scanner-open");
+    const ownsHistory = scannerHistoryId && history.state?.sweeoScanner === scannerHistoryId;
+    scannerHistoryId = null;
+    if (ownsHistory && !fromHistory) {
+      if (leavingPage) {
+        const state = { ...history.state }; delete state.sweeoScanner;
+        history.replaceState(state, "");
+      } else {
+        scannerHistoryPending = new Promise(resolve => { resolveScannerHistory = resolve; });
+        history.back();
+      }
+    }
   }
   $("scanProduct").onclick = openScanner;
-  $("scannerClose").onclick = stopScanner;
-  window.addEventListener("pagehide", stopScanner);
-  document.addEventListener("visibilitychange", () => { if (document.hidden && scannerStream) stopScanner(); });
-  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("scanner").hidden) stopScanner(); });
-  $("scannerManual").onclick = () => { stopScanner(); const line = [...$("eLines").children].find(x => !x.dataset.item) || addLine(); line.querySelector(".picker input").focus(); };
+  $("scannerClose").onclick = () => stopScanner();
+  $("scanner").addEventListener("cancel", event => {
+    event.preventDefault(); event.stopPropagation(); stopScanner();
+  });
+  $("scanner").addEventListener("close", () => { if (!$("scanner").open) stopScanner(); });
+  $("dEntry").addEventListener("close", () => stopScanner());
+  window.addEventListener("popstate", () => {
+    if (resolveScannerHistory) {
+      const resolve = resolveScannerHistory;
+      resolveScannerHistory = null; scannerHistoryPending = null; resolve();
+    }
+    if (scannerSession && history.state?.sweeoScanner !== scannerHistoryId) stopScanner({ fromHistory: true });
+  });
+  window.addEventListener("pagehide", () => stopScanner({ leavingPage: true }));
+  document.addEventListener("visibilitychange", () => { if (document.hidden && scannerSession) stopScanner(); });
+  $("scannerManual").onclick = () => {
+    stopScanner();
+    if (!$("dEntry").open) return;
+    const line = [...$("eLines").children].find(x => !x.dataset.item) || addLine();
+    line.querySelector(".picker input").focus();
+  };
   $("scannerResults").onclick = e => { const button = e.target.closest("button[data-item]"); if (button) acceptScannedItem(button.dataset.item, Number(button.dataset.carton) || null); };
   $("scannerTorch").onclick = async () => {
-    const track = scannerStream?.getVideoTracks()[0]; if (!track) return;
-    scannerTorchOn = !scannerTorchOn;
-    try { await track.applyConstraints({ advanced: [{ torch: scannerTorchOn }] }); $("scannerTorch").classList.toggle("on", scannerTorchOn); $("scannerTorch").textContent = scannerTorchOn ? "ปิดไฟฉาย" : "เปิดไฟฉาย"; }
-    catch (_) { scannerTorchOn = false; $("scannerTorch").textContent = "อุปกรณ์ไม่รองรับไฟฉาย"; }
+    const run = scannerSession, track = run?.stream?.getVideoTracks()[0];
+    if (!scannerActive(run) || !track) return;
+    const torch = !run.torch;
+    $("scannerTorch").disabled = true;
+    try {
+      await track.applyConstraints({ advanced: [{ torch }] });
+      if (!scannerActive(run)) return;
+      run.torch = torch;
+      $("scannerTorch").classList.toggle("on", torch); $("scannerTorch").textContent = torch ? "ปิดไฟฉาย" : "เปิดไฟฉาย";
+    } catch (_) {
+      if (scannerActive(run)) { run.torch = false; $("scannerTorch").textContent = "อุปกรณ์ไม่รองรับไฟฉาย"; }
+    } finally { if (scannerActive(run)) $("scannerTorch").disabled = false; }
   };
   function addLine(itemId) {
     const w = document.createElement("div");

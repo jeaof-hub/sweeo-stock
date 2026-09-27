@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=zh-TW-1">
+<link rel="stylesheet" href="style.css?v=scanner-dialog-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -212,7 +212,7 @@
   <div class="dlg-foot"><span class="msg" id="invMsg"></span><button class="btn primary" id="invSave" type="button">บันทึก INV</button></div>
 </div></dialog>
 
-<section class="scanner" id="scanner" role="dialog" aria-modal="true" aria-labelledby="scannerTitle" hidden>
+<dialog class="scanner" id="scanner" aria-labelledby="scannerTitle">
   <video id="scannerVideo" playsinline muted></video>
   <div class="scanner-shade">
     <div class="scanner-top"><button class="scanner-close" id="scannerClose" type="button" aria-label="ปิดกล้อง">×</button><h2 id="scannerTitle">สแกนรหัสสินค้า</h2><span></span></div>
@@ -226,7 +226,7 @@
       <button type="button" id="scannerManual">พิมพ์รหัสเอง</button>
     </div>
   </div>
-</section>
+</dialog>
 
 <dialog id="dEntryReview" aria-labelledby="erTitle"><div class="dlg">
   <div class="dlg-head"><div><h2 id="erTitle">ตรวจสอบก่อนยืนยัน</h2><p id="erMode"></p></div><button class="btn x" type="button" id="erBack">กลับไปแก้ไข</button></div>
@@ -280,6 +280,6 @@
 <script src="i18n.js?v=zh-TW-1"></script>
 <script src="delivery-note.js?v=zh-TW-1"></script>
 <script src="scanner.js?v=phase-5-3"></script>
-<script src="app.js?v=zh-TW-1"></script>
+<script src="app.js?v=scanner-dialog-1"></script>
 </body>
 </html>

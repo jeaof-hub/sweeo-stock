@@ -779,11 +779,32 @@
     return scannerWorkerPromise;
   }
   function scannerCrop() {
-    const video = $("scannerVideo"), canvas = document.createElement("canvas");
-    let sw = Math.round(video.videoWidth * .88), sh = Math.round(sw / 2.25);
-    if (sh > video.videoHeight * .58) { sh = Math.round(video.videoHeight * .58); sw = Math.round(sh * 2.25); }
-    const sx = Math.round((video.videoWidth - sw) / 2), sy = Math.round((video.videoHeight - sh) / 2);
-    canvas.width = Math.min(sw, 1400); canvas.height = Math.round(sh * canvas.width / sw);
+    const video = $("scannerVideo"), frame = $("scannerFrame"), canvas = document.createElement("canvas");
+    const videoRect = video.getBoundingClientRect(), frameRect = frame.getBoundingClientRect();
+    const intrinsicWidth = video.videoWidth, intrinsicHeight = video.videoHeight;
+    if (!intrinsicWidth || !intrinsicHeight || !videoRect.width || !videoRect.height) throw new Error("CAMERA_NOT_READY");
+
+    // The video is rendered with object-fit: cover. Convert the visible frame
+    // from viewport coordinates back into intrinsic camera-pixel coordinates.
+    // This is recalculated for every OCR frame, so rotation and camera aspect
+    // changes are reflected without retaining stale geometry.
+    const coverScale = Math.max(videoRect.width / intrinsicWidth, videoRect.height / intrinsicHeight);
+    const renderedWidth = intrinsicWidth * coverScale, renderedHeight = intrinsicHeight * coverScale;
+    const cropOffsetX = (videoRect.width - renderedWidth) / 2;
+    const cropOffsetY = (videoRect.height - renderedHeight) / 2;
+    const rawLeft = (frameRect.left - videoRect.left - cropOffsetX) / coverScale;
+    const rawTop = (frameRect.top - videoRect.top - cropOffsetY) / coverScale;
+    const rawRight = (frameRect.right - videoRect.left - cropOffsetX) / coverScale;
+    const rawBottom = (frameRect.bottom - videoRect.top - cropOffsetY) / coverScale;
+    const sx = Math.max(0, Math.min(intrinsicWidth, rawLeft));
+    const sy = Math.max(0, Math.min(intrinsicHeight, rawTop));
+    const right = Math.max(sx, Math.min(intrinsicWidth, rawRight));
+    const bottom = Math.max(sy, Math.min(intrinsicHeight, rawBottom));
+    const sw = right - sx, sh = bottom - sy;
+    if (sw < 1 || sh < 1) throw new Error("CAMERA_FRAME_OUTSIDE_VIDEO");
+
+    canvas.width = Math.max(1, Math.min(Math.round(sw), 1400));
+    canvas.height = Math.max(1, Math.round(sh * canvas.width / sw));
     canvas.getContext("2d", { willReadFrequently: true }).drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
@@ -827,7 +848,7 @@
       history.pushState({ ...history.state, sweeoScanner: scannerHistoryId }, "");
     } catch (_) { scannerHistoryId = null; }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
       if (!scannerActive(run)) { stream.getTracks().forEach(track => track.stop()); return; }
       run.stream = stream;
       $("scannerVideo").srcObject = stream; await $("scannerVideo").play();

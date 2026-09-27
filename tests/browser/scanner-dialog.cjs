@@ -22,12 +22,23 @@ const mockClient=`window.supabase={createClient(){
  await page.route('https://cdnjs.cloudflare.com/**',r=>r.fulfill({body:''}));
  await page.route('**/supabase.js',r=>r.fulfill({contentType:'application/javascript',body:mockClient}));
  await page.addInitScript(({engine})=>{
-  const camera=window.testCamera={streams:[],ocr:[],permissions:[],deferPermission:false,deny:false,torchCalls:[]};
-  const getUserMedia=async()=>{
+  const camera=window.testCamera={streams:[],ocr:[],crops:[],constraints:[],permissions:[],deferPermission:false,deny:false,torchCalls:[],sourceWidth:1280,sourceHeight:720};
+  const getUserMedia=async constraints=>{
    if(camera.deny)throw Error('Permission denied');
-   const canvas=document.createElement('canvas');canvas.width=1280;canvas.height=720;
+   camera.constraints.push(constraints);
+   const canvas=document.createElement('canvas');canvas.width=camera.sourceWidth;canvas.height=camera.sourceHeight;
    const ctx=canvas.getContext('2d');
-   const paint=()=>{ctx.fillStyle='#b8bec3';ctx.fillRect(0,0,1280,720);ctx.fillStyle='#ede9e1';ctx.fillRect(150,120,980,480);ctx.fillStyle='#20242a';ctx.font='bold 56px sans-serif';ctx.fillText('SWEEO',210,210);ctx.font='38px sans-serif';ctx.fillText('LSA-T8C090628-G',210,290);ctx.fillText('5991301242T',210,360);ctx.font='24px sans-serif';ctx.fillText('SIMULATED CAMERA / TEST FIXTURE',210,535);};
+   const paint=()=>{
+    const w=canvas.width,h=canvas.height,font=Math.round(Math.min(w,h)*.04);
+    ctx.fillStyle='#b8bec3';ctx.fillRect(0,0,w,h);
+    ctx.textAlign='center';ctx.font=`bold ${font}px sans-serif`;
+    ctx.fillStyle='#00ffff';ctx.fillRect(w/2-55,h*.1-16,110,32);
+    ctx.fillStyle='#20242a';ctx.fillText('OUTSIDE OCR FRAME',w/2,h*.1-26);
+    ctx.fillStyle='#ede9e1';ctx.fillRect(w/2-190,h/2-75,380,150);
+    ctx.fillStyle='#20242a';ctx.fillText('INSIDE OCR FRAME',w/2,h/2-24);
+    ctx.fillStyle='#ff00ff';ctx.fillRect(w/2-55,h/2-12,110,32);
+    ctx.fillStyle='#20242a';ctx.font=`${Math.round(font*.72)}px sans-serif`;ctx.fillText('5991301242T',w/2,h/2+62);
+   };
    paint();
    const stream=canvas.captureStream(10);
    const timer=setInterval(paint,100);camera.streams.push(stream);
@@ -36,13 +47,26 @@ const mockClient=`window.supabase={createClient(){
    if(camera.deferPermission)await new Promise(resolve=>camera.permissions.push(resolve));
    return stream;
   };
-  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{try{return await getUserMedia();}catch(error){camera.error=String(error);throw error;}}}});
-  window.Tesseract={createWorker:async()=>({setParameters:async()=>{},recognize:()=>new Promise(resolve=>camera.ocr.push(resolve)),terminate:async()=>{}})};
+  Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async constraints=>{try{return await getUserMedia(constraints);}catch(error){camera.error=String(error);throw error;}}}});
+  window.Tesseract={createWorker:async()=>({setParameters:async()=>{},recognize:input=>{
+   const pixels=input.getContext('2d').getImageData(0,0,input.width,input.height).data;
+   let inside=0,outside=0;
+   for(let i=0;i<pixels.length;i+=4){const r=pixels[i],g=pixels[i+1],b=pixels[i+2];if(r>220&&g<40&&b>220)inside++;if(r<40&&g>220&&b>220)outside++;}
+   camera.crops.push({width:input.width,height:input.height,inside,outside});
+   return new Promise(resolve=>camera.ocr.push(resolve));
+  },terminate:async()=>{}})};
  },{engine});
  const check=async(name,fn)=>{await fn();console.log('PASS',engine,name);};
  const open=async()=>{await page.locator('#scanProduct').click();await page.waitForFunction(()=>testCamera.error||(document.querySelector('#scanner').open&&document.querySelector('#scannerVideo').videoWidth>0));assert.equal(await page.evaluate(()=>testCamera.error),undefined);};
  const close=async()=>{await page.locator('#scannerClose').click();await page.waitForFunction(()=>!document.querySelector('#scanner').open&&!history.state?.sweeoScanner);};
  const resolveOCR=async text=>{await page.waitForFunction(()=>testCamera.ocr.length>0);await page.evaluate(t=>testCamera.ocr.shift()({data:{text:t}}),text);};
+ const assertCropMatchesFrame=async previousCount=>{
+  await page.waitForFunction(count=>testCamera.crops.length>count,previousCount);
+  const crop=await page.evaluate(()=>testCamera.crops.at(-1));
+  assert.ok(crop.inside>500,`inside marker missing from OCR crop: ${JSON.stringify(crop)}`);
+  assert.equal(crop.outside,0,`outside marker leaked into OCR crop: ${JSON.stringify(crop)}`);
+  assert.ok(Math.abs(crop.width/crop.height-2.25)<.03,`OCR crop does not match frame ratio: ${JSON.stringify(crop)}`);
+ };
  const allStopped=()=>page.waitForFunction(()=>testCamera.streams.every(s=>s.getTracks().every(t=>t.readyState==='ended')));
  try{
  await page.goto(base,{waitUntil:'networkidle'});await page.locator('#outBtn').click();
@@ -52,10 +76,22 @@ const mockClient=`window.supabase={createClient(){
   assert.equal(await page.locator('#scanner').evaluate(e=>e.matches(':modal')),true);
   assert.equal(await page.locator('#dEntry').evaluate(e=>e.open),true);
   const rect=await page.locator('#scanner').boundingBox();assert.equal(rect.x,0);assert.equal(rect.y,0);assert.equal(rect.width,page.viewportSize().width);assert.ok(Math.abs(rect.height-page.viewportSize().height)<1);
-  assert.equal(await page.locator('#scannerVideo').getAttribute('playsinline'),'');
+ assert.equal(await page.locator('#scannerVideo').getAttribute('playsinline'),'');
+  await assertCropMatchesFrame(0);
+  const constraints=await page.evaluate(()=>testCamera.constraints[0]);
+  assert.equal('width' in constraints.video,false);assert.equal('height' in constraints.video,false);
   await page.screenshot({path:path.join(output,engine+'-simulated-camera.png')});
  });
  await check('torch is clickable (simulated torch capability)',async()=>{await page.locator('#scannerTorch').click();assert.deepEqual(await page.evaluate(()=>testCamera.torchCalls),[true]);});
+ await check('visible frame maps to a portrait camera stream after orientation change',async()=>{
+  await close();await resolveOCR('');
+  await page.evaluate(()=>{testCamera.sourceWidth=720;testCamera.sourceHeight=1280;});
+  const previous=await page.evaluate(()=>testCamera.crops.length);await open();await assertCropMatchesFrame(previous);
+  await page.screenshot({path:path.join(output,engine+'-simulated-camera-portrait.png')});
+  await close();await resolveOCR('');
+  await page.evaluate(()=>{testCamera.sourceWidth=1280;testCamera.sourceHeight=720;});
+  await open();
+ });
  await check('close stops every track, keeps existing form data; late OCR is discarded',async()=>{
   await close();await allStopped();await resolveOCR('5991301242T LSA-T8C090628-G');
   assert.equal(await page.locator('#dEntry').evaluate(e=>e.open),true);assert.equal(await page.locator('#eLines .line').count(),1);assert.equal(await page.locator('#eLines .qtyin').first().inputValue(),'7');

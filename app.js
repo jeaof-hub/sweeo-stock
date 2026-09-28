@@ -1,6 +1,6 @@
 /* SWEEO Stock — GitHub Pages + Supabase
  * Visitor (ไม่ล็อกอิน): เห็นเฉพาะยอดคงเหลือผ่านฟังก์ชัน public_stock()
- * Auditor: อ่านรายละเอียดสต็อกและประวัติ
+ * Executive (database role: auditor): อ่านรายละเอียดสต็อกและประวัติ
  * Warehouse: ส่งคำขอเบิกให้ Admin / Owner / Founder อนุมัติ
  * Admin: ส่งคำขอเบิกให้ Owner / Founder อนุมัติ และอนุมัติคำขอของ Warehouse
  * Owner / Founder: เบิกได้ทันทีและอนุมัติคำขอ พร้อมจัดการสินค้า ปรับยอด ส่งออกข้อมูล และดูรายการที่ถูกลบ
@@ -53,8 +53,8 @@
   let invitePending = authUrlType === "invite" || authUrlType === "recovery";
   if (authParams.has("error")) {
     $("authNotice").textContent = authParams.get("error_code") === "otp_expired"
-      ? "ลิงก์เชิญหมดอายุแล้ว กรุณาขอ Foundator ส่งคำเชิญใหม่ แล้วเปิดลิงก์ใหม่ทันที"
-      : "ลิงก์ยืนยันบัญชีใช้ไม่ได้ กรุณาขอ Foundator ส่งคำเชิญใหม่";
+      ? "ลิงก์เชิญหมดอายุแล้ว กรุณาขอผู้ก่อตั้งส่งคำเชิญใหม่ แล้วเปิดลิงก์ใหม่ทันที"
+      : "ลิงก์ยืนยันบัญชีใช้ไม่ได้ กรุณาขอผู้ก่อตั้งส่งคำเชิญใหม่";
     $("authNotice").hidden = false;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
   }
@@ -137,7 +137,9 @@
       sb.from("dispatch_requests").select("*").order("created_at", { ascending: false }),
       sb.from("dispatch_request_lines").select("*").order("item_id"),
       sb.rpc("dispatch_pending_totals"),
-      fetchAll(() => sb.from("invoices").select("*").order("inv_date", { ascending: false }))
+      canManageInvoices() || currentRole === "warehouse"
+        ? fetchAll(() => sb.from("invoices").select("*").order("inv_date", { ascending: false }))
+        : Promise.resolve([])
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
@@ -196,7 +198,7 @@
     const isMember = mode === "member";
     $("loginBtn").hidden = !!s; $("userMenu").hidden = !s;
     $("meEmail").textContent = s ? `${s.user.email}${ownUsername ? ` · @${ownUsername}` : ""}` : "";
-    $("roleBadge").textContent = { founder: "ผู้ก่อตั้ง", owner: "เจ้าของ", admin: "แอดมิน", warehouse: "คลังสินค้า", auditor: "ผู้ตรวจสอบ" }[currentRole] || "ผู้เยี่ยมชม";
+    $("roleBadge").textContent = { founder: "ผู้ก่อตั้ง", owner: "เจ้าของ", admin: "แอดมิน", warehouse: "คลังสินค้า", auditor: "ผู้บริหาร" }[currentRole] || "ผู้เยี่ยมชม";
     $("roleBadge").classList.toggle("staff", isMember);
     $("roleBadge").classList.toggle("founder", canManageUsers());
     $("tabs").hidden = !isMember; $("actions").hidden = !canRecord(); $("newItemBtn").hidden = !canManageStock();
@@ -212,7 +214,7 @@
     document.querySelectorAll("[data-member]").forEach(o => { o.hidden = !isMember; o.disabled = !isMember; });
     if (!isMember && ["avgDesc", "cover"].includes($("fSort").value)) $("fSort").value = "order";
     const b = $("banner");
-    if (s && !isMember) { b.hidden = false; b.textContent = "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อ Foundator"; }
+    if (s && !isMember) { b.hidden = false; b.textContent = "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อผู้ก่อตั้ง"; }
     else b.hidden = true;
     if (invitePending && s) {
       invitePending = false;
@@ -296,7 +298,7 @@
         ${founder ? '<span class="badge founder">ผู้ก่อตั้ง</span>' : `<div class="user-controls">
           <label>ชื่อผู้ใช้ <input class="user-username" aria-label="ชื่อผู้ใช้ของ ${esc(u.email)}" value="${esc(u.username || "")}" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,30}[A-Za-z0-9]" autocapitalize="none" spellcheck="false"></label>
           <label>สิทธิ์ <select class="user-role" aria-label="สิทธิ์ของ ${esc(u.email)}">
-            <option value="auditor"${["auditor", "sales", "viewer"].includes(u.role) ? " selected" : ""}>ผู้ตรวจสอบ</option>
+            <option value="auditor"${["auditor", "sales", "viewer"].includes(u.role) ? " selected" : ""}>ผู้บริหาร</option>
             <option value="warehouse"${["warehouse", "editor"].includes(u.role) ? " selected" : ""}>คลังสินค้า</option>
             <option value="admin"${["admin", "manager"].includes(u.role) ? " selected" : ""}>แอดมิน</option>
             <option value="owner"${u.role === "owner" ? " selected" : ""}>เจ้าของ</option>

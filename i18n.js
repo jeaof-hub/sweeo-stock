@@ -12,7 +12,7 @@
     "สต็อกสินค้า SWEEO": "SWEEO Stock",
     "กำลังโหลดข้อมูล": "Loading stock",
     "โหมดมืด": "Dark mode", "โหมดสว่าง": "Light mode", "เว็บไซต์บริษัท SWEEO": "SWEEO company website",
-    "ผู้เยี่ยมชม": "Visitor", "ผู้ตรวจสอบ": "Auditor", "คลังสินค้า": "Warehouse", "แอดมิน": "Admin", "เจ้าของ": "Owner", "ผู้ก่อตั้ง": "Founder",
+    "ผู้เยี่ยมชม": "Visitor", "ผู้บริหาร": "Executive", "คลังสินค้า": "Warehouse", "แอดมิน": "Admin", "เจ้าของ": "Owner", "ผู้ก่อตั้ง": "Founder",
     "เข้าสู่ระบบ": "Sign in", "บัญชี": "Account", "ส่งออก Excel": "Export Excel", "จัดการผู้ใช้": "Manage users", "เปลี่ยนรหัสผ่าน": "Change password", "ออกจากระบบ": "Sign out",
     "ชื่อผู้ใช้": "Username", "ชื่อผู้ใช้หรืออีเมล": "Username or email", "ชื่อผู้ใช้ (3–32 ตัวอักษรอังกฤษ/ตัวเลข)": "Username (3–32 Latin letters/numbers)", "ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง": "Incorrect username/email or password",
     "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง": "Incorrect username or password", "พยายามเข้าสู่ระบบบ่อยเกินไป กรุณารอสักครู่": "Too many sign-in attempts. Please wait and try again", "เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง": "Sign-in failed. Please try again",
@@ -61,9 +61,9 @@
   };
 
   Object.assign(english, {
-    "ลิงก์เชิญหมดอายุแล้ว กรุณาขอ Foundator ส่งคำเชิญใหม่ แล้วเปิดลิงก์ใหม่ทันที": "The invitation link has expired. Ask an administrator for a new link and open it promptly.",
-    "ลิงก์ยืนยันบัญชีใช้ไม่ได้ กรุณาขอ Foundator ส่งคำเชิญใหม่": "This account link is invalid. Ask an administrator for a new one.",
-    "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อ Foundator": "This account has no access. Contact an administrator.",
+    "ลิงก์เชิญหมดอายุแล้ว กรุณาขอผู้ก่อตั้งส่งคำเชิญใหม่ แล้วเปิดลิงก์ใหม่ทันที": "The invitation link has expired. Ask the Founder for a new link and open it promptly.",
+    "ลิงก์ยืนยันบัญชีใช้ไม่ได้ กรุณาขอผู้ก่อตั้งส่งคำเชิญใหม่": "This account link is invalid. Ask the Founder for a new one.",
+    "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อผู้ก่อตั้ง": "This account has no access. Contact the Founder.",
     "ตั้งรหัสผ่านของคุณ": "Set your password", "อีเมลหรือรหัสผ่านไม่ถูกต้อง": "Incorrect email or password", "เข้าสู่ระบบแล้ว": "Signed in", "ออกจากระบบแล้ว": "Signed out",
     "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร": "Password must be at least 8 characters.", "รหัสผ่านสองช่องไม่ตรงกัน": "Passwords do not match.", "เปลี่ยนรหัสผ่านแล้ว": "Password changed.", "กรุณาเข้าสู่ระบบใหม่": "Please sign in again.",
     "สร้างบัญชีแล้ว แจ้งรหัสผ่านให้เจ้าของบัญชี": "Account created. Share the password with its owner.", "ตั้งรหัสผ่านแล้ว แจ้งรหัสใหม่ให้เจ้าของบัญชี": "Password set. Share the new password with its owner.",

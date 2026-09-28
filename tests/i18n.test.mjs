@@ -37,3 +37,14 @@ test('Thai and English translation behavior remains available',()=>{
  assert.equal(setup('en').window.SWEEO_I18N.translate('พอขายอีก 2 เดือน'),'About 2 months remaining');
  assert.equal(setup('invalid').document.documentElement.lang,'th');
 });
+test('auditor display label is Executive in all three interface languages',()=>{
+ assert.equal(setup('th').window.SWEEO_I18N.translate('ผู้บริหาร'),'ผู้บริหาร');
+ assert.equal(setup('en').window.SWEEO_I18N.translate('ผู้บริหาร'),'Executive');
+ assert.equal(setup('zh-TW').window.SWEEO_I18N.translate('ผู้บริหาร'),'主管');
+});
+test('the legacy Founder misspelling is absent from user-facing and administration sources',()=>{
+ const misspelling=new RegExp('Found'+'ator','i');
+ for(const file of ['app.js','index.html','i18n.js','i18n-zh-TW.js','README.md','supabase/functions/manage-users/index.ts']){
+  assert.doesNotMatch(readFileSync(new URL('../'+file,import.meta.url),'utf8'),misspelling,file);
+ }
+});

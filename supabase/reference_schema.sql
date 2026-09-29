@@ -1375,6 +1375,8 @@ begin
       from public.movements m
       left join public.items i on i.id=m.item_id
       where m.deleted_at is null and m.kind='out'
+        and lower(trim(coalesce(m.source,'')))<>'adjustment'
+        and lower(trim(coalesce(m.dept,'')))<>'stock adjust'
         and m.date>=month_start and m.date<month_start+interval '1 month'
       group by m.item_id, coalesce(nullif(i.code,''),m.code), coalesce(nullif(i.model,''),m.model)
       order by sum(m.qty) desc, m.item_id
@@ -1404,6 +1406,8 @@ begin
     'weekly_out_qty', (
       select coalesce(sum(m.qty),0) from public.movements m
       where m.deleted_at is null and m.kind='out'
+        and lower(trim(coalesce(m.source,'')))<>'adjustment'
+        and lower(trim(coalesce(m.dept,'')))<>'stock adjust'
         and m.date>=week_start and m.date<week_start+7
     ),
     'monthly_top_items', top_rows.value

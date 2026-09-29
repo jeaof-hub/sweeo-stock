@@ -5,6 +5,7 @@ import fs from "node:fs";
 const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const sql = fs.readFileSync(new URL("../supabase/19_dashboard_metrics.sql", import.meta.url), "utf8");
+const adjustmentFix = fs.readFileSync(new URL("../supabase/20_dashboard_exclude_adjustments.sql", import.meta.url), "utf8");
 const en = fs.readFileSync(new URL("../i18n.js", import.meta.url), "utf8");
 const zh = fs.readFileSync(new URL("../i18n-zh-TW.js", import.meta.url), "utf8");
 
@@ -30,6 +31,14 @@ test("dashboard calculations exclude deleted movements and use Bangkok periods",
   assert.match(sql, /date_trunc\('week'/i);
   assert.match(sql, /date_trunc\('month'/i);
   assert.match(sql, /r\.status='approved'/i);
+});
+
+test("outbound dashboard statistics exclude both kinds of stock adjustment", () => {
+  const sourceFilters = adjustmentFix.match(/lower\(trim\(coalesce\(m\.source,''\)\)\)<>\s*'adjustment'/gi) || [];
+  const legacyFilters = adjustmentFix.match(/lower\(trim\(coalesce\(m\.dept,''\)\)\)<>\s*'stock adjust'/gi) || [];
+  assert.equal(sourceFilters.length, 2, "source adjustment must be excluded from weekly and monthly metrics");
+  assert.equal(legacyFilters.length, 2, "legacy Stock Adjust must be excluded from weekly and monthly metrics");
+  assert.doesNotMatch(adjustmentFix, /\b(insert|update|delete|truncate)\s+(into\s+|public\.)?(items|movements|dispatch_requests|dispatch_request_lines|invoices)\b/i);
 });
 
 test("dashboard labels exist in English and Traditional Chinese", () => {

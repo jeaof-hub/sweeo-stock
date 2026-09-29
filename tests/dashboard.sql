@@ -28,6 +28,8 @@ begin
 
   select coalesce(sum(qty),0) into expected from public.movements
   where deleted_at is null and kind='out'
+    and lower(trim(coalesce(source,'')))<>'adjustment'
+    and lower(trim(coalesce(dept,'')))<>'stock adjust'
     and date>=date_trunc('week',timezone('Asia/Bangkok',now()))::date
     and date<date_trunc('week',timezone('Asia/Bangkok',now()))::date+7;
   select user_id into actor from public.staff where role='founder' and is_active limit 1;

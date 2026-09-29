@@ -61,6 +61,9 @@
   };
 
   Object.assign(english, {
+    "ภาพรวม": "Dashboard", "ข้อมูลล่าสุด": "Latest data", "รีเฟรช": "Refresh", "ข้อมูล ณ": "Data as of", "สัปดาห์เริ่ม": "Week starting",
+    "สินค้าที่ควรสั่งผลิต": "Products to reorder", "ดูสต็อก": "View stock", "สินค้าส่งออกสูงสุดเดือนนี้": "Top dispatched products this month", "คำขอรออนุมัติ": "Requests awaiting approval", "ส่งออกสัปดาห์นี้": "Dispatched this week",
+    "ไม่มีสินค้าที่ถึงจุดสั่งผลิต": "No products have reached their reorder point", "ยังไม่มีรายการส่งออกเดือนนี้": "No dispatches this month",
     "ลิงก์เชิญหมดอายุแล้ว กรุณาขอผู้ก่อตั้งส่งคำเชิญใหม่ แล้วเปิดลิงก์ใหม่ทันที": "The invitation link has expired. Ask the Founder for a new link and open it promptly.",
     "ลิงก์ยืนยันบัญชีใช้ไม่ได้ กรุณาขอผู้ก่อตั้งส่งคำเชิญใหม่": "This account link is invalid. Ask the Founder for a new one.",
     "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อผู้ก่อตั้ง": "This account has no access. Contact the Founder.",
@@ -78,6 +81,8 @@
   });
 
   const dynamic = [
+    [/^ข้อมูล ณ (.+) · สัปดาห์เริ่ม (.+)$/, "Data as of $1 · Week starting $2"],
+    [/^และอีก ([\d,]+) รายการ$/, "$1 more products"],
     [/^([\d,]+) รายการ\s+อัปเดต (.+?) น\.$/, "$1 products · Updated $2"],
     [/^แสดง ([\d,]+) จาก ([\d,]+) รายการ$/, "Showing $1 of $2 products"],
     [/^แสดง 300 รายการแรก พิมพ์คำค้นหาเพื่อกรองให้แคบลง$/, "Showing the first 300 products. Search to narrow the list."],

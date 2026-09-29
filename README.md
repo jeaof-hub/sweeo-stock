@@ -170,3 +170,8 @@ window.SWEEO_CONFIG = {
 ```sql
 select date, kind, qty, customer, doc_no, deleted_at from movements where deleted_at is not null order by deleted_at desc;
 ```
+# Dashboard (Phase 6A)
+
+สมาชิกที่เข้าสู่ระบบมีหน้า **ภาพรวม** สำหรับดูสินค้าที่ควรสั่งผลิต คำขอที่ตนมีสิทธิ์อนุมัติ ยอดส่งออกประจำสัปดาห์ และสินค้าส่งออกสูงสุดประจำเดือน ผู้ที่จัดการ INV ได้จะเห็นจำนวนรายการที่รอเปิด INV เพิ่มเติม ข้อมูลมาจาก `dashboard_summary()` และบังคับขอบเขตสิทธิ์ในฐานข้อมูล
+
+ติดตั้งด้วย `supabase/19_dashboard_metrics.sql` หลัง migration 18 ฟังก์ชันนี้อ่านข้อมูลเท่านั้นและใช้เขตเวลา `Asia/Bangkok` ในการแบ่งสัปดาห์และเดือน

@@ -32,6 +32,7 @@
   let stockChanges = [];           // founder / owner change log
   let dispatchRequests = [], dispatchLines = [], pendingByItem = new Map();
   let invoices = [];
+  let dashboard = null;
   let moreStockChanges = false;
   let calc = new Map();            // id -> {inQ,out,bal,status}
   let staffNames = {};
@@ -125,10 +126,10 @@
   /* ---------- loading ---------- */
   async function loadVisitor() {
     const rows = await fetchAll(() => sb.rpc("public_stock").order("id"));
-    items = new Map(rows.map(r => [r.id, r])); entries = []; deletedEntries = []; stockChanges = []; invoices = []; moreStockChanges = false;
+    items = new Map(rows.map(r => [r.id, r])); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; moreStockChanges = false;
   }
   async function loadMember() {
-    const [its, mvs, audit, st, changes, requests, requestLines, pendingTotals, invoiceRows] = await Promise.all([
+    const [its, mvs, audit, st, changes, requests, requestLines, pendingTotals, invoiceRows, dashboardResult] = await Promise.all([
       fetchAll(() => sb.from("items").select("*").eq("active", true).order("id")),
       fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
       canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false })) : Promise.resolve([]),
@@ -139,7 +140,8 @@
       sb.rpc("dispatch_pending_totals"),
       canManageInvoices() || currentRole === "warehouse"
         ? fetchAll(() => sb.from("invoices").select("*").order("inv_date", { ascending: false }))
-        : Promise.resolve([])
+        : Promise.resolve([]),
+      sb.rpc("dashboard_summary")
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
@@ -151,6 +153,8 @@
     if (requests.error) throw requests.error; if (requestLines.error) throw requestLines.error; if (pendingTotals.error) throw pendingTotals.error;
     dispatchRequests = requests.data || []; dispatchLines = (requestLines.data || []).map(l => ({ ...l, requested_qty: Number(l.requested_qty), approved_qty: l.approved_qty == null ? null : Number(l.approved_qty) }));
     invoices = invoiceRows || [];
+    if (dashboardResult.error) throw dashboardResult.error;
+    dashboard = dashboardResult.data || null;
     pendingByItem = new Map((pendingTotals.data || []).map(r => [r.item_id, Number(r.pending_qty)]));
   }
   async function reload() {
@@ -224,7 +228,7 @@
       openDlg($("dPw"));
     }
     if (!isMember || !canManageStock() && !$("viewAudit").hidden || !canManageUsers() && !$("viewChanges").hidden || !canManageInvoices() && !$("viewInvoices").hidden) setTab("stock");
-    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dispatchRequests = []; dispatchLines = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
+    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; dispatchRequests = []; dispatchLines = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
     if (isMember) subscribe(); else unsubscribe();
@@ -492,24 +496,59 @@
   $("log").addEventListener("click", e => { const r = e.target.closest(".row"); if (r) openEntry(r.dataset.eid); });
   ["lMonth", "lKind", "lDept"].forEach(id => $(id).addEventListener("change", () => { if (id === "lMonth") $("lMonth").dataset.touched = "1"; renderLog(); }));
   let lt; $("lq").addEventListener("input", () => { clearTimeout(lt); lt = setTimeout(renderLog, 150); });
+
+  function renderDashboard() {
+    if (!dashboard || mode !== "member") {
+      $("dashboardCards").innerHTML = '<div class="state"><h2>โหลดข้อมูลไม่สำเร็จ</h2></div>';
+      $("dashboardReorder").innerHTML = ""; $("dashboardTop").innerHTML = "";
+      return;
+    }
+    const reorder = Array.isArray(dashboard.reorder_items) ? dashboard.reorder_items : [];
+    const top = Array.isArray(dashboard.monthly_top_items) ? dashboard.monthly_top_items : [];
+    const cards = [
+      { icon: "!", label: "สินค้าที่ควรสั่งผลิต", value: reorder.length, tone: reorder.some(x => x.severity === "red") ? "danger" : "warning", action: "reorder" },
+      { icon: "✓", label: "คำขอรออนุมัติ", value: Number(dashboard.pending_approval_count) || 0, tone: "brand", action: "pending", hidden: !["admin","owner","founder"].includes(currentRole) },
+      { icon: "INV", label: "รายการรอเปิด INV", value: dashboard.invoice_waiting_count == null ? null : Number(dashboard.invoice_waiting_count) || 0, tone: "neutral", action: "invoices", hidden: dashboard.invoice_waiting_count == null },
+      { icon: "↗", label: "ส่งออกสัปดาห์นี้", value: fmt(Number(dashboard.weekly_out_qty) || 0), suffix: "ชิ้น", tone: "success" }
+    ].filter(x => !x.hidden);
+    $("dashboardCards").innerHTML = cards.map(c => `<button class="dashboard-card ${c.tone}" type="button"${c.action ? ` data-dashboard-action="${c.action}"` : ""}><span class="dashboard-icon">${esc(c.icon)}</span><span><small>${esc(c.label)}</small><b>${esc(c.value)}${c.suffix ? ` <em>${esc(c.suffix)}</em>` : ""}</b></span></button>`).join("");
+    $("dashboardPeriod").textContent = `ข้อมูล ณ ${thDate(dashboard.as_of)} · สัปดาห์เริ่ม ${thDate(dashboard.week_start)}`;
+    $("dashboardMonth").textContent = dashboard.month_start ? thMonth(String(dashboard.month_start).slice(0, 7)) : "";
+    $("dashboardReorder").innerHTML = reorder.length ? `<div class="dashboard-list">${reorder.slice(0, 12).map(x => `<button type="button" data-dashboard-item="${esc(x.id)}"><span class="stock-dot ${esc(x.severity)}"></span><span><b>${esc(x.model || x.code || x.spec || "(ไม่มีชื่อรุ่น)")}</b><small>${esc(x.code || "–")}</small></span><span class="dashboard-qty"><b>${fmt(Number(x.balance))}</b><small>จุดสั่ง ${fmt(Number(x.rop))}</small></span></button>`).join("")}</div>${reorder.length > 12 ? `<p class="dashboard-more">และอีก ${fmt(reorder.length - 12)} รายการ</p>` : ""}` : '<div class="dashboard-empty">ไม่มีสินค้าที่ถึงจุดสั่งผลิต</div>';
+    $("dashboardTop").innerHTML = top.length ? `<ol class="dashboard-ranking">${top.map(x => `<li><span><b>${esc(x.model || x.code || "(ไม่มีชื่อรุ่น)")}</b><small>${esc(x.code || "–")}</small></span><strong>${fmt(Number(x.qty))} <small>ชิ้น</small></strong></li>`).join("")}</ol>` : '<div class="dashboard-empty">ยังไม่มีรายการส่งออกเดือนนี้</div>';
+  }
+
   function setTab(which) {
+    $("tabDashboard").setAttribute("aria-selected", String(which === "dashboard"));
     $("tabStock").setAttribute("aria-selected", String(which === "stock"));
     $("tabLog").setAttribute("aria-selected", String(which === "log"));
     $("tabAudit").setAttribute("aria-selected", String(which === "audit"));
     $("tabChanges").setAttribute("aria-selected", String(which === "changes"));
     $("tabPending").setAttribute("aria-selected", String(which === "pending")); $("tabMine").setAttribute("aria-selected", String(which === "mine"));
     $("tabInvoices").setAttribute("aria-selected", String(which === "invoices"));
-    $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes"; $("viewPending").hidden = which !== "pending"; $("viewMine").hidden = which !== "mine"; $("viewInvoices").hidden = which !== "invoices";
+    $("viewDashboard").hidden = which !== "dashboard"; $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes"; $("viewPending").hidden = which !== "pending"; $("viewMine").hidden = which !== "mine"; $("viewInvoices").hidden = which !== "invoices";
+    if (which === "dashboard") renderDashboard();
     if (which === "log") renderLog();
     if (which === "audit") renderAudit();
     if (which === "changes") renderChangeLog();
     if (which === "pending" || which === "mine") renderDispatchRequests(which);
     if (which === "invoices") renderInvoices();
   }
+  $("tabDashboard").onclick = () => setTab("dashboard");
   $("tabStock").onclick = () => setTab("stock"); $("tabLog").onclick = () => setTab("log"); $("tabAudit").onclick = () => { if (canManageStock()) setTab("audit"); };
   $("tabChanges").onclick = () => { if (canManageUsers()) setTab("changes"); };
   $("tabPending").onclick = () => setTab("pending"); $("tabMine").onclick = () => setTab("mine");
   $("tabInvoices").onclick = () => { if (canManageInvoices()) setTab("invoices"); };
+  $("dashboardRefresh").onclick = reload;
+  $("dashboardReorderLink").onclick = () => { statusFilter = "red"; setTab("stock"); renderAlerts(); renderList(); };
+  $("viewDashboard").addEventListener("click", e => {
+    const action = e.target.closest("[data-dashboard-action]")?.dataset.dashboardAction;
+    const item = e.target.closest("[data-dashboard-item]")?.dataset.dashboardItem;
+    if (item) { setTab("stock"); openItem(item); return; }
+    if (action === "reorder") { statusFilter = "red"; setTab("stock"); renderAlerts(); renderList(); }
+    if (action === "pending" && ["admin","owner","founder"].includes(currentRole)) setTab("pending");
+    if (action === "invoices" && canManageInvoices()) setTab("invoices");
+  });
 
   const requestStatusLabel = { pending: "รออนุมัติ", approved: "อนุมัติแล้ว", rejected: "ปฏิเสธแล้ว", cancelled: "ยกเลิก" };
   function requestLines(id) { return dispatchLines.filter(l => l.request_id === id); }
@@ -649,6 +688,7 @@
       fillDatalist($("saleList"), recent(sorted.map(e => e.sale)));
     }
     renderAlerts(); renderList();
+    if (!$("viewDashboard").hidden) renderDashboard();
     const pendingCount = dispatchRequests.filter(r => r.status === "pending" && canReviewDispatch(r)).length;
     $("pendingBadge").textContent = pendingCount ? `(${pendingCount})` : "";
     const invoiceWaitingCount = dispatchLines.filter(l => !l.invoice_id && !l.no_invoice_reason && dispatchRequests.some(r => r.id === l.request_id && r.status === "approved")).length;

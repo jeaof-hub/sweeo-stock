@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=scanner-dialog-1">
+<link rel="stylesheet" href="style.css?v=dashboard-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -43,6 +43,7 @@
       </div>
     </div>
     <div class="tabs" role="tablist" id="tabs" hidden>
+      <button class="tab" role="tab" id="tabDashboard" aria-selected="false" type="button">ภาพรวม</button>
       <button class="tab" role="tab" id="tabStock" aria-selected="true" type="button">สต็อก</button>
       <button class="tab" role="tab" id="tabLog" aria-selected="false" type="button">ประวัติรับเข้า/ส่งออก</button>
       <button class="tab" role="tab" id="tabPending" aria-selected="false" type="button" hidden>รออนุมัติ <span id="pendingBadge"></span></button>
@@ -55,6 +56,15 @@
 
   <p class="banner" id="banner" hidden></p>
   <p class="banner auth-error" id="authNotice" role="alert" hidden></p>
+
+  <section id="viewDashboard" hidden>
+    <div class="dashboard-head"><div><h2>ภาพรวม</h2><p id="dashboardPeriod">ข้อมูลล่าสุด</p></div><button class="btn sm" id="dashboardRefresh" type="button">รีเฟรช</button></div>
+    <div class="dashboard-cards" id="dashboardCards" aria-live="polite"></div>
+    <div class="dashboard-grid">
+      <article class="dashboard-panel"><div class="dashboard-panel-head"><h3>สินค้าที่ควรสั่งผลิต</h3><button class="btn sm" id="dashboardReorderLink" type="button">ดูสต็อก</button></div><div id="dashboardReorder"></div></article>
+      <article class="dashboard-panel"><div class="dashboard-panel-head"><h3>สินค้าส่งออกสูงสุดเดือนนี้</h3><span id="dashboardMonth"></span></div><div id="dashboardTop"></div></article>
+    </div>
+  </section>
 
   <section id="viewStock">
     <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -278,10 +288,10 @@
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 <datalist id="invoiceCustomerList"></datalist>
 
-<script src="i18n-zh-TW.js?v=executive-label-1"></script>
-<script src="i18n.js?v=executive-label-1"></script>
+<script src="i18n-zh-TW.js?v=dashboard-1"></script>
+<script src="i18n.js?v=dashboard-1"></script>
 <script src="delivery-note.js?v=zh-TW-1"></script>
 <script src="scanner.js?v=phase-5-3"></script>
-<script src="app.js?v=executive-label-1"></script>
+<script src="app.js?v=dashboard-1"></script>
 </body>
 </html>

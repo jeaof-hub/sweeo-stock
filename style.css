@@ -21,6 +21,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--brand);outline-offset:2px}
 .wrap{width:100%;max-width:1080px;margin:0 auto;padding:0 16px 110px;overflow-x:hidden}
 [hidden]{display:none!important}
+.offline-banner{position:sticky;top:0;z-index:20;padding:8px 16px;background:var(--amber-soft);color:var(--amber);text-align:center;font-size:.85rem;font-weight:600;border-bottom:1px solid var(--amber)}
 
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:12px 0 0;border-bottom:1px solid var(--line)}
 .bar{display:flex;align-items:center;gap:12px}
@@ -33,6 +34,8 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
 .btn.danger{color:var(--red);border-color:var(--red-soft)}
 .btn.sm{padding:5px 10px;font-size:.85rem}
+.install-btn{color:var(--brand-text);border-color:var(--brand)}
+.install-steps{padding:4px 20px 22px}.install-steps h3{margin:16px 0 4px}.install-steps ol{margin:4px 0;padding-left:24px}.install-dialog{max-width:520px}
 .tabs{display:flex;gap:4px;margin-top:10px;flex-wrap:wrap}
 .tab{border:none;background:none;padding:8px 14px;border-bottom:3px solid transparent;cursor:pointer;font-weight:500;color:var(--muted)}
 .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--brand)}

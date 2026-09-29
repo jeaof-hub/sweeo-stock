@@ -6,18 +6,19 @@
 <title>สต็อกสินค้า SWEEO</title>
 <link rel="icon" type="image/png" sizes="192x192" href="assets/app-icon-192.png?v=1">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png?v=1">
-<link rel="manifest" href="site.webmanifest?v=1">
+<link rel="manifest" href="site.webmanifest?v=2">
 <meta name="theme-color" content="#F78325">
 <script src="theme.js?v=zh-TW-1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=dashboard-1">
+<link rel="stylesheet" href="style.css?v=pwa-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
 </head>
 <body>
+<div class="offline-banner" id="offlineBanner" role="status" hidden>ออฟไลน์ — ไม่สามารถโหลดข้อมูลสต็อกล่าสุดได้</div>
 <div class="wrap">
   <header class="top">
     <div class="bar">
@@ -27,6 +28,7 @@
         <button class="btn theme-switch" id="themeSwitch" type="button" aria-label="โหมดมืด" title="โหมดมืด" aria-pressed="false"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14a8 8 0 0 1-10-10A8.5 8.5 0 1 0 20 14Z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
         <select class="btn lang-switch" id="langSwitch" aria-label="เลือกภาษา" title="เลือกภาษา" data-no-translate><option value="th" lang="th">ไทย</option><option value="en" lang="en">English</option><option value="zh-TW" lang="zh-TW">繁體中文</option></select>
         <span class="badge" id="roleBadge">ผู้เยี่ยมชม</span>
+        <button class="btn install-btn" id="installBtn" type="button" hidden>ติดตั้งแอป</button>
         <button class="btn" id="loginBtn" type="button">เข้าสู่ระบบ</button>
         <div class="menu" id="userMenu" hidden>
           <button class="btn" id="menuBtn" type="button" aria-haspopup="true" aria-expanded="false">บัญชี</button>
@@ -284,14 +286,23 @@
   <div class="dlg-foot"><span class="msg" id="kMsg"></span><button class="btn" type="button" data-close>ไม่ลบ</button><button class="btn danger" type="button" id="kOk">ลบรายการ</button></div>
 </div></dialog>
 
+<dialog id="dInstall" aria-labelledby="installTitle"><div class="dlg install-dialog">
+  <div class="dlg-head"><div><h2 id="installTitle">ติดตั้งแอป SWEEO Stock</h2><p>เปิดระบบได้สะดวกจากหน้าจอหลัก</p></div><button class="btn" type="button" data-close>ปิด</button></div>
+  <div class="install-steps">
+    <h3>iPhone / iPad</h3><ol><li>เปิดหน้านี้ด้วย Safari</li><li>แตะปุ่มแชร์</li><li>เลือก “เพิ่มไปยังหน้าจอโฮม”</li></ol>
+    <h3>Android</h3><ol><li>เปิดเมนูของ Chrome</li><li>เลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”</li></ol>
+  </div>
+</div></dialog>
+
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 <datalist id="invoiceCustomerList"></datalist>
 
-<script src="i18n-zh-TW.js?v=dashboard-1"></script>
-<script src="i18n.js?v=dashboard-1"></script>
+<script src="i18n-zh-TW.js?v=pwa-1"></script>
+<script src="i18n.js?v=pwa-1"></script>
+<script src="pwa.js?v=1"></script>
 <script src="delivery-note.js?v=zh-TW-1"></script>
 <script src="scanner.js?v=phase-5-3"></script>
-<script src="app.js?v=dashboard-1"></script>
+<script src="app.js?v=pwa-1"></script>
 </body>
 </html>

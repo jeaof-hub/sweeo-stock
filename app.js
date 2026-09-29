@@ -1211,7 +1211,7 @@
   /* ---------- boot ---------- */
   const cfg = window.SWEEO_CONFIG || {};
   if (!window.supabase || !cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || /YOUR-/.test(cfg.SUPABASE_URL + cfg.SUPABASE_ANON_KEY)) {
-    fatal("ยังไม่ได้ตั้งค่าการเชื่อมต่อ", "ใส่ SUPABASE_URL และ SUPABASE_ANON_KEY ในไฟล์ config.js ตามคู่มือ README");
+    fatal(navigator.onLine ? "ยังไม่ได้ตั้งค่าการเชื่อมต่อ" : "ออฟไลน์", navigator.onLine ? "ใส่ SUPABASE_URL และ SUPABASE_ANON_KEY ในไฟล์ config.js ตามคู่มือ README" : "ไม่สามารถโหลดข้อมูลสต็อกล่าสุดได้ เชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่");
     $("loginBtn").hidden = true;
     return;
   }

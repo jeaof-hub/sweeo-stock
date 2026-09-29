@@ -1,8 +1,15 @@
 {
   "name": "SWEEO Inventory",
   "short_name": "SWEEO Stock",
+  "id": "./",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "description": "ระบบสต็อกสินค้า SWEEO สำหรับทีม Laster Tech (Thailand)",
+  "lang": "th",
+  "categories": ["business", "productivity"],
+  "orientation": "any",
   "background_color": "#fffdfc",
   "theme_color": "#f78325",
   "icons": [

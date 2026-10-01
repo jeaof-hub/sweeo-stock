@@ -186,3 +186,9 @@ select date, kind, qty, customer, doc_no, deleted_at from movements where delete
 ติดตั้งด้วย `supabase/19_dashboard_metrics.sql` หลัง migration 18 ฟังก์ชันนี้อ่านข้อมูลเท่านั้นและใช้เขตเวลา `Asia/Bangkok` ในการแบ่งสัปดาห์และเดือน
 
 จาก migration 20 เป็นต้นไป ตัวเลขส่งออกประจำสัปดาห์และอันดับประจำเดือนไม่นับรายการปรับยอดทั้งรายการใหม่ที่ `source='adjustment'` และข้อมูลเดิมจาก Google Sheet ที่ `dept='Stock Adjust'` รายการเหล่านี้ยังคงมีผลกับยอดคงเหลือตามเดิม
+
+## คู่มือในแอป (Phase 7)
+
+เนื้อหาคู่มือเก็บในฐานข้อมูลและอ่านผ่าน `get_manual()` ตามสิทธิ์ของผู้ใช้เท่านั้น ต้นฉบับและ workflow สำหรับอัปเดตอยู่ใน repo ส่วนตัว `sweeo-stock-backup`; ห้ามนำเนื้อหาคู่มือมาใส่ใน repo สาธารณะ, JavaScript, Service Worker cache หรือ test fixture
+
+เมื่อเพิ่มหรือเปลี่ยนฟีเจอร์ ให้ตรวจว่าหัวข้อใดในคู่มือต้องแก้ จากนั้นแก้ต้นฉบับใน repo ส่วนตัวและรัน workflow **Sync in-app manual**

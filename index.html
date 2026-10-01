@@ -15,6 +15,8 @@
 <link rel="stylesheet" href="style.css?v=realtime-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <script src="config.js"></script>
 </head>
 <body>
@@ -31,6 +33,7 @@
         <span class="badge" id="roleBadge">ผู้เยี่ยมชม</span>
         <button class="btn refresh-btn" id="refreshBtn" type="button" aria-label="รีเฟรชข้อมูล" title="รีเฟรชข้อมูล">↻</button>
         <button class="btn install-btn" id="installBtn" type="button" hidden>ติดตั้งแอป</button>
+        <button class="btn" id="visitorManualBtn" type="button">วิธีใช้</button>
         <button class="btn" id="loginBtn" type="button">เข้าสู่ระบบ</button>
         <div class="menu" id="userMenu" hidden>
           <button class="btn" id="menuBtn" type="button" aria-haspopup="true" aria-expanded="false">บัญชี</button>
@@ -40,6 +43,7 @@
             <button type="button" id="manageUsersBtn" hidden>จัดการผู้ใช้</button>
             <button type="button" id="auditMenuBtn" hidden>รายการที่ถูกลบ</button>
             <button type="button" id="changesMenuBtn" hidden>บันทึกการเปลี่ยนแปลง</button>
+            <button type="button" id="manualMenuBtn">คู่มือการใช้งาน</button>
             <button type="button" id="pwBtn">เปลี่ยนรหัสผ่าน</button>
             <button type="button" id="logoutBtn">ออกจากระบบ</button>
           </div>
@@ -296,6 +300,15 @@
   </div>
 </div></dialog>
 
+<dialog id="dManual" class="manual-dialog" aria-labelledby="manualTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="manualTitle">คู่มือการใช้งาน</h2><p id="manualFallback" hidden>ยังไม่มีคู่มือภาษานี้ ระบบจึงแสดงภาษาไทย</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
+  <div class="manual-layout">
+    <nav id="manualToc" class="manual-toc" aria-label="สารบัญ" data-no-translate></nav>
+    <main id="manualContent" class="manual-content" data-no-translate></main>
+  </div>
+  <div class="manual-status" id="manualStatus" role="status"></div>
+</div></dialog>
+
 <datalist id="custList"></datalist><datalist id="deptList"></datalist><datalist id="saleList"></datalist>
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 <datalist id="invoiceCustomerList"></datalist>
@@ -306,6 +319,7 @@
 <script src="delivery-note.js?v=zh-TW-1"></script>
 <script src="scanner.js?v=phase-5-3"></script>
 <script src="realtime-lifecycle.js?v=1"></script>
+<script src="manual.js?v=1"></script>
 <script src="app.js?v=realtime-1"></script>
 </body>
 </html>

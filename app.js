@@ -23,6 +23,7 @@
 
   /* ---------- state ---------- */
   let sb = null;
+  let manualController = null;
   let mode = "visitor";            // "visitor" | "member"
   let session = null;
   let currentRole = null;          // "founder" | "owner" | "admin" | "warehouse" | "auditor" | null
@@ -256,7 +257,7 @@
     if (currentRole === "manager") currentRole = "admin";
     mode = ["founder", "owner", "admin", "warehouse", "auditor"].includes(currentRole) ? "member" : "visitor";
     const isMember = mode === "member";
-    $("loginBtn").hidden = !!s; $("userMenu").hidden = !s;
+    $("loginBtn").hidden = !!s; $("visitorManualBtn").hidden = !!s; $("userMenu").hidden = !s;
     $("meEmail").textContent = s ? `${s.user.email}${ownUsername ? ` · @${ownUsername}` : ""}` : "";
     $("roleBadge").textContent = { founder: "ผู้ก่อตั้ง", owner: "เจ้าของ", admin: "แอดมิน", warehouse: "คลังสินค้า", auditor: "ผู้บริหาร" }[currentRole] || "ผู้เยี่ยมชม";
     $("roleBadge").classList.toggle("staff", isMember);
@@ -276,6 +277,7 @@
     const b = $("banner");
     if (s && !isMember) { b.hidden = false; b.textContent = "บัญชีนี้ยังไม่ได้รับสิทธิ์ ติดต่อผู้ก่อตั้ง"; }
     else b.hidden = true;
+    manualController?.refresh();
     if (invitePending && s) {
       invitePending = false;
       try { history.replaceState(null, "", location.pathname + location.search); } catch (_) {}
@@ -318,7 +320,7 @@
   });
   $("menuBtn").onclick = () => { const p = $("menuPop"); p.hidden = !p.hidden; $("menuBtn").setAttribute("aria-expanded", String(!p.hidden)); };
   document.addEventListener("click", e => { if (!e.target.closest("#userMenu")) { $("menuPop").hidden = true; $("menuBtn").setAttribute("aria-expanded", "false"); } });
-  $("logoutBtn").onclick = async () => { $("menuPop").hidden = true; await sb.auth.signOut(); toast("ออกจากระบบแล้ว"); };
+  $("logoutBtn").onclick = async () => { $("menuPop").hidden = true; manualController?.clear(); await sb.auth.signOut(); toast("ออกจากระบบแล้ว"); };
   $("auditMenuBtn").onclick = () => { $("menuPop").hidden = true; if (canManageStock()) setTab("audit"); };
   $("changesMenuBtn").onclick = () => { $("menuPop").hidden = true; if (canManageUsers()) setTab("changes"); };
   $("pwBtn").onclick = () => { $("menuPop").hidden = true; $("pwTitle").textContent = "เปลี่ยนรหัสผ่าน"; $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = ""; openDlg($("dPw")); };
@@ -1273,6 +1275,14 @@
     return;
   }
   sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+  manualController = window.SWEEO_MANUAL?.createController({
+    sb,
+    lang: () => window.SWEEO_I18N?.lang || "th",
+    dialog: $("dManual"), content: $("manualContent"), toc: $("manualToc"),
+    fallback: $("manualFallback"), status: $("manualStatus"),
+    openButtons: [$("visitorManualBtn"), $("manualMenuBtn")], menuPop: $("menuPop"),
+    markedApi: window.marked, purifier: window.DOMPurify
+  });
   let lastUser;
   sb.auth.onAuthStateChange((event, s) => {
     const uid = s ? s.user.id : null;

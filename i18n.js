@@ -13,7 +13,7 @@
     "กำลังโหลดข้อมูล": "Loading stock",
     "โหมดมืด": "Dark mode", "โหมดสว่าง": "Light mode", "เว็บไซต์บริษัท SWEEO": "SWEEO company website",
     "ผู้เยี่ยมชม": "Visitor", "ผู้บริหาร": "Executive", "คลังสินค้า": "Warehouse", "แอดมิน": "Admin", "เจ้าของ": "Owner", "ผู้ก่อตั้ง": "Founder",
-    "เข้าสู่ระบบ": "Sign in", "บัญชี": "Account", "ส่งออก Excel": "Export Excel", "จัดการผู้ใช้": "Manage users", "เปลี่ยนรหัสผ่าน": "Change password", "ออกจากระบบ": "Sign out",
+    "เข้าสู่ระบบ": "Sign in", "บัญชี": "Account", "วิธีใช้": "Help", "คู่มือการใช้งาน": "User guide", "สารบัญ": "Table of contents", "กำลังโหลดคู่มือ": "Loading guide", "โหลดคู่มือไม่สำเร็จ ลองใหม่": "Could not load the guide. Retry", "ไม่พบเนื้อหาคู่มือสำหรับบัญชีนี้": "No guide is available for this account", "ยังไม่มีคู่มือภาษานี้ ระบบจึงแสดงภาษาไทย": "This guide is not available in English, so Thai is shown", "ส่งออก Excel": "Export Excel", "จัดการผู้ใช้": "Manage users", "เปลี่ยนรหัสผ่าน": "Change password", "ออกจากระบบ": "Sign out",
     "ติดตั้งแอป": "Install app", "ติดตั้งแอป SWEEO Stock": "Install SWEEO Stock", "เปิดระบบได้สะดวกจากหน้าจอหลัก": "Open the system quickly from your home screen",
     "รีเฟรชข้อมูล": "Refresh data", "เรียลไทม์ปกติ": "Realtime connected", "ออนไลน์": "Online", "กำลังเชื่อมต่อ": "Connecting", "กำลังเชื่อมต่อใหม่": "Reconnecting", "โหลดไม่สำเร็จ ลองใหม่": "Load failed. Retry",
     "ออฟไลน์": "Offline", "ออฟไลน์ — ไม่สามารถโหลดข้อมูลสต็อกล่าสุดได้": "Offline — the latest stock data is unavailable", "ไม่สามารถโหลดข้อมูลสต็อกล่าสุดได้ เชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่": "The latest stock data is unavailable. Connect to the internet and retry.",

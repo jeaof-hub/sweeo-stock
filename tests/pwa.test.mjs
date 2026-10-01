@@ -46,11 +46,73 @@ test("service worker bypasses Supabase and every cross-origin request", () => {
   assert.equal(intercepted, true, "same-origin shell asset should use the cache strategy");
 });
 
-test("service worker versions its shell and removes older shell caches", () => {
+test("service worker keeps the offline shell without relying on cache version changes", () => {
   assert.match(source, /const CACHE_NAME = "sweeo-shell-v\d+"/);
   assert.match(source, /key\.startsWith\("sweeo-shell-"\).*key !== CACHE_NAME/);
-  assert.match(source, /ignoreSearch:\s*true/);
+  assert.doesNotMatch(source, /ignoreSearch/);
+  assert.doesNotMatch(source, /install[\s\S]{0,200}skipWaiting/);
+  assert.match(source, /event\.data\?\.type === "SKIP_WAITING"/);
   assert.match(pwa, /beforeinstallprompt/);
   assert.match(pwa, /navigator\.serviceWorker\.register\("\.\/sw\.js"/);
-  for (const required of ["./index.html", "./style.css", "./app.js", "./pwa.js", "./site.webmanifest"]) assert.ok(source.includes(`"${required}"`), `${required} missing from shell`);
+  assert.match(pwa, /registration\.waiting/);
+  assert.match(pwa, /updatefound/);
+  assert.match(pwa, /controllerchange/);
+  assert.match(pwa, /SKIP_WAITING/);
+  for (const required of ["./index.html", "./style.css?v=realtime-1", "./app.js?v=realtime-1", "./pwa.js?v=1", "./site.webmanifest"]) assert.ok(source.includes(`"${required}"`), `${required} missing from shell`);
+});
+
+function createWorkerHarness(fetchImpl, cached = new Map()) {
+  const listeners = {};
+  const puts = [];
+  const cache = {
+    addAll: () => Promise.resolve(),
+    put: (key, value) => { puts.push([typeof key === "string" ? key : key.url, value]); cached.set(typeof key === "string" ? key : key.url, value); return Promise.resolve(); }
+  };
+  const context = {
+    URL, Request, Promise,
+    self: {
+      location: { origin: "https://stock.example" },
+      addEventListener: (name, handler) => { listeners[name] = handler; },
+      skipWaiting: () => Promise.resolve(), clients: { claim: () => Promise.resolve() }
+    },
+    caches: {
+      match: key => Promise.resolve(cached.get(typeof key === "string" ? key : key.url)),
+      open: () => Promise.resolve(cache), keys: () => Promise.resolve([]), delete: () => Promise.resolve(true)
+    },
+    fetch: fetchImpl
+  };
+  vm.runInNewContext(source, context);
+  return { listeners, puts };
+}
+
+async function dispatchFetch(handler, request) {
+  let responsePromise;
+  const background = [];
+  handler({ request, respondWith: value => { responsePromise = value; }, waitUntil: value => background.push(value) });
+  const response = await responsePromise;
+  await Promise.all(background);
+  return response;
+}
+
+test("same-origin app files are network-first and query versions use distinct cache keys", async () => {
+  let revision = "server-v2";
+  const { listeners, puts } = createWorkerHarness(async request => ({ ok: true, type: "basic", body: revision, clone() { return { ...this }; } }));
+  const first = await dispatchFetch(listeners.fetch, new Request("https://stock.example/app.js?v=old"));
+  assert.equal(first.body, "server-v2");
+  revision = "server-v3";
+  const second = await dispatchFetch(listeners.fetch, new Request("https://stock.example/app.js?v=new"));
+  assert.equal(second.body, "server-v3");
+  assert.deepEqual(puts.map(([key]) => key), ["https://stock.example/app.js?v=old", "https://stock.example/app.js?v=new"]);
+});
+
+test("offline app launch falls back to cached HTML and versioned assets", async () => {
+  const cached = new Map([
+    ["./index.html", { body: "offline-shell" }],
+    ["https://stock.example/app.js?v=current", { body: "offline-js" }]
+  ]);
+  const { listeners } = createWorkerHarness(async () => { throw new Error("offline"); }, cached);
+  const page = await dispatchFetch(listeners.fetch, { url: "https://stock.example/anything", method: "GET", mode: "navigate" });
+  const script = await dispatchFetch(listeners.fetch, new Request("https://stock.example/app.js?v=current"));
+  assert.equal(page.body, "offline-shell");
+  assert.equal(script.body, "offline-js");
 });

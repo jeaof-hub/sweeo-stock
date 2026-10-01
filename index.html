@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=pwa-1">
+<link rel="stylesheet" href="style.css?v=realtime-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="config.js"></script>
@@ -23,11 +23,12 @@
   <header class="top">
     <div class="bar">
       <a class="brand-logo" href="https://www.sweeo.com/" target="_blank" rel="noopener noreferrer" aria-label="เว็บไซต์บริษัท SWEEO"><img src="assets/sweeo-logo.png" alt="SWEEO" width="280" height="68"></a>
-      <div class="title"><span class="brand-caption" lang="en">INVENTORY</span><h1>สต็อกสินค้า SWEEO</h1><p id="status">กำลังโหลดข้อมูล</p></div>
+      <div class="title"><span class="brand-caption" lang="en">INVENTORY</span><h1>สต็อกสินค้า SWEEO</h1><div class="sync-line" role="status" aria-live="polite"><span class="connection reconnecting" id="connectionState"><i></i><span>กำลังเชื่อมต่อ</span></span><span id="status">กำลังโหลดข้อมูล</span></div></div>
       <div class="who">
         <button class="btn theme-switch" id="themeSwitch" type="button" aria-label="โหมดมืด" title="โหมดมืด" aria-pressed="false"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14a8 8 0 0 1-10-10A8.5 8.5 0 1 0 20 14Z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg></button>
         <select class="btn lang-switch" id="langSwitch" aria-label="เลือกภาษา" title="เลือกภาษา" data-no-translate><option value="th" lang="th">ไทย</option><option value="en" lang="en">English</option><option value="zh-TW" lang="zh-TW">繁體中文</option></select>
         <span class="badge" id="roleBadge">ผู้เยี่ยมชม</span>
+        <button class="btn refresh-btn" id="refreshBtn" type="button" aria-label="รีเฟรชข้อมูล" title="รีเฟรชข้อมูล">↻</button>
         <button class="btn install-btn" id="installBtn" type="button" hidden>ติดตั้งแอป</button>
         <button class="btn" id="loginBtn" type="button">เข้าสู่ระบบ</button>
         <div class="menu" id="userMenu" hidden>
@@ -298,11 +299,12 @@
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 <datalist id="invoiceCustomerList"></datalist>
 
-<script src="i18n-zh-TW.js?v=pwa-1"></script>
-<script src="i18n.js?v=pwa-1"></script>
+<script src="i18n-zh-TW.js?v=realtime-1"></script>
+<script src="i18n.js?v=realtime-1"></script>
 <script src="pwa.js?v=1"></script>
 <script src="delivery-note.js?v=zh-TW-1"></script>
 <script src="scanner.js?v=phase-5-3"></script>
-<script src="app.js?v=pwa-1"></script>
+<script src="realtime-lifecycle.js?v=1"></script>
+<script src="app.js?v=realtime-1"></script>
 </body>
 </html>

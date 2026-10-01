@@ -1,7 +1,7 @@
 /* SWEEO offline shell. Production data and authentication requests bypass caches. */
-const CACHE_NAME = "sweeo-shell-v1";
+const CACHE_NAME = "sweeo-shell-v2";
 const SHELL = [
-  "./", "./index.html", "./style.css", "./theme.js", "./pwa.js", "./app.js",
+  "./", "./index.html", "./style.css", "./theme.js", "./pwa.js", "./app.js", "./realtime-lifecycle.js",
   "./i18n.js", "./i18n-zh-TW.js", "./delivery-note.js", "./scanner.js",
   "./site.webmanifest", "./assets/sweeo-logo.png", "./assets/app-icon-192.png",
   "./assets/app-icon-512.png", "./assets/apple-touch-icon.png"

@@ -37,7 +37,8 @@
   let calc = new Map();            // id -> {inQ,out,bal,status}
   let staffNames = {};
   let statusFilter = "";
-  let channel = null, reloadTimer = null, loading = false;
+  let channel = null, channelStatus = "closed", channelGeneration = 0, reloadTimer = null;
+  let reconnectTimer = null, reconnectAttempt = 0, subscribedOnce = false, pollTimer = null, lastUpdated = null;
   const canManageUsers = () => ["founder", "owner"].includes(currentRole);
   const canDispatch = () => ["founder", "owner", "admin", "warehouse"].includes(currentRole);
   const canReceive = () => ["founder", "owner", "admin"].includes(currentRole);
@@ -99,10 +100,11 @@
     $("list").innerHTML = `<div class="state"><h2>${esc(title)}</h2><p>${esc(msg)}</p></div>`;
     $("status").textContent = title; $("count").textContent = "";
   }
-  async function fetchAll(build) {
+  const withSignal = (query, signal) => signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
+  async function fetchAll(build, signal) {
     const out = []; const size = 1000;
     for (let from = 0; ; from += size) {
-      const { data, error } = await build().range(from, from + size - 1);
+      const { data, error } = await withSignal(build().range(from, from + size - 1), signal);
       if (error) throw error;
       out.push(...data);
       if (data.length < size) break;
@@ -124,24 +126,24 @@
   }
 
   /* ---------- loading ---------- */
-  async function loadVisitor() {
-    const rows = await fetchAll(() => sb.rpc("public_stock").order("id"));
+  async function loadVisitor(signal) {
+    const rows = await fetchAll(() => sb.rpc("public_stock").order("id"), signal);
     items = new Map(rows.map(r => [r.id, r])); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; moreStockChanges = false;
   }
-  async function loadMember() {
+  async function loadMember(signal) {
     const [its, mvs, audit, st, changes, requests, requestLines, pendingTotals, invoiceRows, dashboardResult] = await Promise.all([
-      fetchAll(() => sb.from("items").select("*").eq("active", true).order("id")),
-      fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id")),
-      canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false })) : Promise.resolve([]),
-      sb.rpc("staff_display_names"),
-      canManageUsers() ? sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201) : Promise.resolve({ data: [] }),
-      sb.from("dispatch_requests").select("*").order("created_at", { ascending: false }),
-      sb.from("dispatch_request_lines").select("*").order("item_id"),
-      sb.rpc("dispatch_pending_totals"),
+      fetchAll(() => sb.from("items").select("*").eq("active", true).order("id"), signal),
+      fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by").is("deleted_at", null).order("id"), signal),
+      canManageStock() ? fetchAll(() => sb.from("movements").select("id,item_id,code,model,date,kind,qty,customer,doc_no,dept,sale,note,source,created_at,created_by,deleted_at,deleted_by").not("deleted_at", "is", null).order("deleted_at", { ascending: false }), signal) : Promise.resolve([]),
+      withSignal(sb.rpc("staff_display_names"), signal),
+      canManageUsers() ? withSignal(sb.from("stock_audit").select("id,occurred_at,actor_id,entity,entity_id,action,before_data,after_data").order("id", { ascending: false }).limit(201), signal) : Promise.resolve({ data: [] }),
+      withSignal(sb.from("dispatch_requests").select("*").order("created_at", { ascending: false }), signal),
+      withSignal(sb.from("dispatch_request_lines").select("*").order("item_id"), signal),
+      withSignal(sb.rpc("dispatch_pending_totals"), signal),
       canManageInvoices() || currentRole === "warehouse"
-        ? fetchAll(() => sb.from("invoices").select("*").order("inv_date", { ascending: false }))
+        ? fetchAll(() => sb.from("invoices").select("*").order("inv_date", { ascending: false }), signal)
         : Promise.resolve([]),
-      sb.rpc("dashboard_summary")
+      withSignal(sb.rpc("dashboard_summary"), signal)
     ]);
     items = new Map(its.map(r => [r.id, r]));
     entries = mvs.map(m => ({ ...m, qty: Number(m.qty), date: m.date ? String(m.date).slice(0, 10) : null }));
@@ -157,29 +159,83 @@
     dashboard = dashboardResult.data || null;
     pendingByItem = new Map((pendingTotals.data || []).map(r => [r.item_id, Number(r.pending_qty)]));
   }
-  async function reload() {
-    if (loading) return; loading = true;
-    try {
-      if (mode === "member") await loadMember(); else await loadVisitor();
+  const reloadCoordinator = window.SWEEO_REALTIME_LIFECYCLE.createReloadCoordinator({
+    timeoutMs: 20000,
+    task: async signal => { if (mode === "member") await loadMember(signal); else await loadVisitor(signal); },
+    onSuccess: () => {
       renderAll();
-      $("status").textContent = `${fmt(items.size)} รายการ  อัปเดต ${new Date().toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })} น.`;
-    } catch (err) {
+      lastUpdated = new Date();
+      $("status").textContent = `${fmt(items.size)} รายการ  อัปเดต ${lastUpdated.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })} น.`;
+    },
+    onError: err => {
       if (!items.size) fatal("โหลดข้อมูลไม่สำเร็จ", dbErr(err).replace("บันทึกไม่สำเร็จ: ", "") + "  รีเฟรชหน้าแล้วลองใหม่");
-      else $("status").textContent = "โหลดข้อมูลล่าสุดไม่สำเร็จ กำลังแสดงข้อมูลชุดเดิม";
-    } finally { loading = false; }
+      else $("status").textContent = "โหลดไม่สำเร็จ ลองใหม่";
+      if (navigator.onLine && mode === "member" && channelStatus !== "joined") setConnectionState("reconnecting");
+    }
+  });
+  function reload() { return reloadCoordinator.request(); }
+  function setConnectionState(state) {
+    const el = $("connectionState");
+    if (!navigator.onLine) state = "offline";
+    el.className = `connection ${state}`;
+    el.querySelector("span").textContent = state === "connected" ? (mode === "member" ? "เรียลไทม์ปกติ" : "ออนไลน์") : state === "offline" ? "ออฟไลน์" : "กำลังเชื่อมต่อใหม่";
   }
   const scheduleReload = () => { clearTimeout(reloadTimer); reloadTimer = setTimeout(reload, 700); };
-  function subscribe() {
-    unsubscribe();
-    channel = sb.channel("stock-changes")
+  function clearReconnect() { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  function scheduleReconnect() {
+    clearReconnect();
+    if (mode !== "member" || document.visibilityState === "hidden" || !navigator.onLine) return;
+    const delay = window.SWEEO_REALTIME_LIFECYCLE.reconnectDelay(reconnectAttempt++);
+    reconnectTimer = setTimeout(() => subscribe(true), delay);
+  }
+  function subscribe(force = false) {
+    if (mode !== "member" || !navigator.onLine) { setConnectionState("offline"); return; }
+    if (!force && channel && ["joining", "joined"].includes(channelStatus)) return;
+    unsubscribe(false);
+    channelStatus = "joining"; setConnectionState("reconnecting");
+    const generation = ++channelGeneration;
+    const nextChannel = sb.channel("stock-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "movements" }, scheduleReload)
       .on("postgres_changes", { event: "*", schema: "public", table: "items" }, scheduleReload)
       .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_requests" }, scheduleReload)
       .on("postgres_changes", { event: "*", schema: "public", table: "dispatch_request_lines" }, scheduleReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, scheduleReload)
-      .subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, scheduleReload);
+    channel = nextChannel;
+    nextChannel.subscribe(status => {
+      if (generation !== channelGeneration || channel !== nextChannel) return;
+      if (status === "SUBSCRIBED") {
+        const recovered = subscribedOnce;
+        channelStatus = "joined"; reconnectAttempt = 0; clearReconnect(); subscribedOnce = true; setConnectionState("connected");
+        if (recovered) reload();
+      } else if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
+        channelStatus = status.toLowerCase(); setConnectionState("reconnecting");
+        channel = null; sb.removeChannel(nextChannel); scheduleReconnect();
+      }
+    });
   }
-  function unsubscribe() { if (channel) { sb.removeChannel(channel); channel = null; } }
+  function unsubscribe(reset = true) {
+    clearReconnect(); channelGeneration++;
+    if (channel) sb.removeChannel(channel);
+    channel = null; channelStatus = "closed";
+    if (reset) { subscribedOnce = false; reconnectAttempt = 0; }
+  }
+  function stopPolling() { clearInterval(pollTimer); pollTimer = null; }
+  function startPolling() {
+    stopPolling();
+    if (!["admin", "owner", "founder"].includes(currentRole) || document.visibilityState === "hidden") return;
+    pollTimer = setInterval(() => { if (navigator.onLine && document.visibilityState !== "hidden") reload(); }, 60000);
+  }
+  function resumeApp() {
+    if (document.visibilityState === "hidden") return;
+    if (mode === "member" && channelStatus !== "joined") subscribe();
+    reload(); startPolling();
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") stopPolling(); else resumeApp(); });
+  window.addEventListener("pageshow", resumeApp);
+  window.addEventListener("focus", resumeApp);
+  window.addEventListener("online", () => { setConnectionState("reconnecting"); resumeApp(); });
+  window.addEventListener("offline", () => { unsubscribe(false); stopPolling(); setConnectionState("offline"); });
+  $("refreshBtn").onclick = () => { if (mode === "member" && channelStatus !== "joined") subscribe(); reload(); };
 
   /* ---------- auth / mode ---------- */
   async function applySession(s) {
@@ -231,7 +287,8 @@
     items = new Map(); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; dispatchRequests = []; dispatchLines = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
-    if (isMember) subscribe(); else unsubscribe();
+    if (isMember) subscribe(); else { unsubscribe(); setConnectionState(navigator.onLine ? "connected" : "offline"); }
+    startPolling();
   }
 
   $("loginBtn").onclick = () => { $("lgMsg").textContent = ""; openDlg($("dLogin")); setTimeout(() => $("lgIdentity").focus(), 50); };
@@ -1219,7 +1276,15 @@
   let lastUser;
   sb.auth.onAuthStateChange((event, s) => {
     const uid = s ? s.user.id : null;
-    if (event === "TOKEN_REFRESHED" || (event === "INITIAL_SESSION" && lastUser !== undefined)) { session = s; return; }
+    if (event === "TOKEN_REFRESHED") {
+      session = s;
+      setTimeout(() => {
+        if (s?.access_token) sb.realtime.setAuth(s.access_token);
+        if (mode === "member" && channelStatus !== "joined" && document.visibilityState !== "hidden") subscribe();
+      }, 0);
+      return;
+    }
+    if (event === "INITIAL_SESSION" && lastUser !== undefined) { session = s; return; }
     if (uid === lastUser && event !== "INITIAL_SESSION") { session = s; return; }
     lastUser = uid;
     setTimeout(() => applySession(s), 0);   // อย่าเรียก Supabase ภายใน callback โดยตรง

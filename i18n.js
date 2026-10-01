@@ -15,6 +15,7 @@
     "ผู้เยี่ยมชม": "Visitor", "ผู้บริหาร": "Executive", "คลังสินค้า": "Warehouse", "แอดมิน": "Admin", "เจ้าของ": "Owner", "ผู้ก่อตั้ง": "Founder",
     "เข้าสู่ระบบ": "Sign in", "บัญชี": "Account", "ส่งออก Excel": "Export Excel", "จัดการผู้ใช้": "Manage users", "เปลี่ยนรหัสผ่าน": "Change password", "ออกจากระบบ": "Sign out",
     "ติดตั้งแอป": "Install app", "ติดตั้งแอป SWEEO Stock": "Install SWEEO Stock", "เปิดระบบได้สะดวกจากหน้าจอหลัก": "Open the system quickly from your home screen",
+    "รีเฟรชข้อมูล": "Refresh data", "เรียลไทม์ปกติ": "Realtime connected", "ออนไลน์": "Online", "กำลังเชื่อมต่อ": "Connecting", "กำลังเชื่อมต่อใหม่": "Reconnecting", "โหลดไม่สำเร็จ ลองใหม่": "Load failed. Retry",
     "ออฟไลน์": "Offline", "ออฟไลน์ — ไม่สามารถโหลดข้อมูลสต็อกล่าสุดได้": "Offline — the latest stock data is unavailable", "ไม่สามารถโหลดข้อมูลสต็อกล่าสุดได้ เชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่": "The latest stock data is unavailable. Connect to the internet and retry.",
     "เปิดหน้านี้ด้วย Safari": "Open this page in Safari", "แตะปุ่มแชร์": "Tap Share", "เลือก “เพิ่มไปยังหน้าจอโฮม”": "Choose “Add to Home Screen”", "เปิดเมนูของ Chrome": "Open the Chrome menu", "เลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”": "Choose “Install app” or “Add to Home screen”",
     "ชื่อผู้ใช้": "Username", "ชื่อผู้ใช้หรืออีเมล": "Username or email", "ชื่อผู้ใช้ (3–32 ตัวอักษรอังกฤษ/ตัวเลข)": "Username (3–32 Latin letters/numbers)", "ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง": "Incorrect username/email or password",

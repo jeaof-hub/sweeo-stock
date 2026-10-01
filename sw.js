@@ -1,5 +1,6 @@
 /* SWEEO offline shell. Production data and authentication requests bypass caches. */
 const CACHE_NAME = "sweeo-shell-v2";
+const LEGACY_PWA_KEY = "./pwa.js";
 const SHELL = [
   "./", "./index.html", "./style.css?v=realtime-1", "./theme.js?v=zh-TW-1", "./pwa.js?v=1", "./app.js?v=realtime-1",
   "./realtime-lifecycle.js?v=1", "./i18n.js?v=realtime-1", "./i18n-zh-TW.js?v=realtime-1",
@@ -9,11 +10,18 @@ const SHELL = [
 ];
 
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL)));
+  event.waitUntil(caches.open(CACHE_NAME).then(async cache => {
+    const upgradingLegacyWorker = Boolean(await cache.match(LEGACY_PWA_KEY));
+    await cache.addAll(SHELL);
+    if (upgradingLegacyWorker) await self.skipWaiting();
+  }));
 });
 
 self.addEventListener("activate", event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("sweeo-shell-") && key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil(Promise.all([
+    caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("sweeo-shell-") && key !== CACHE_NAME).map(key => caches.delete(key)))),
+    caches.open(CACHE_NAME).then(cache => cache.delete(LEGACY_PWA_KEY))
+  ]).then(() => self.clients.claim()));
 });
 
 self.addEventListener("message", event => {

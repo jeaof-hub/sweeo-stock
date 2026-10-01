@@ -50,7 +50,8 @@ test("service worker keeps the offline shell without relying on cache version ch
   assert.match(source, /const CACHE_NAME = "sweeo-shell-v\d+"/);
   assert.match(source, /key\.startsWith\("sweeo-shell-"\).*key !== CACHE_NAME/);
   assert.doesNotMatch(source, /ignoreSearch/);
-  assert.doesNotMatch(source, /install[\s\S]{0,200}skipWaiting/);
+  assert.match(source, /upgradingLegacyWorker[\s\S]{0,200}skipWaiting/);
+  assert.match(source, /cache\.delete\(LEGACY_PWA_KEY\)/);
   assert.match(source, /event\.data\?\.type === "SKIP_WAITING"/);
   assert.match(pwa, /beforeinstallprompt/);
   assert.match(pwa, /navigator\.serviceWorker\.register\("\.\/sw\.js"/);

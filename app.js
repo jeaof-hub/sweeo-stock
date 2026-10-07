@@ -11,6 +11,7 @@
   const nf = new Intl.NumberFormat("en-US");
   const locale = ({ en: "en-GB", "zh-TW": "zh-TW" })[window.SWEEO_I18N?.lang] || "th-TH";
   const t = text => window.SWEEO_I18N?.translate(text) ?? text;
+  const dispatchView = window.SWEEO_DISPATCH_VIEW;
   const fmt = n => (n === null || n === undefined || isNaN(n)) ? "–" : nf.format(Math.round(n * 10) / 10);
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
   const today = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
@@ -268,6 +269,7 @@
     $("auditMenuBtn").hidden = !canManageStock(); $("changesMenuBtn").hidden = !canManageUsers();
     $("tabPending").hidden = !["admin", "owner", "founder"].includes(currentRole);
     $("tabMine").hidden = !["warehouse", "admin"].includes(currentRole);
+    $("tabDeliveryNotes").hidden = !dispatchView.canSeeDeliveryNotes(currentRole);
     $("tabInvoices").hidden = !canManageInvoices();
     $("outBtn").textContent = currentRole === "warehouse" ? "ขอเบิก" : "เบิกสินค้า";
     $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
@@ -285,7 +287,7 @@
       $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = "";
       openDlg($("dPw"));
     }
-    if (!isMember || !canManageStock() && !$("viewAudit").hidden || !canManageUsers() && !$("viewChanges").hidden || !canManageInvoices() && !$("viewInvoices").hidden) setTab("stock");
+    if (!isMember || !canManageStock() && !$("viewAudit").hidden || !canManageUsers() && !$("viewChanges").hidden || !canManageInvoices() && !$("viewInvoices").hidden || !dispatchView.canSeeDeliveryNotes(currentRole) && !$("viewDeliveryNotes").hidden) setTab("stock");
     items = new Map(); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; dispatchRequests = []; dispatchLines = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
@@ -584,19 +586,22 @@
     $("tabAudit").setAttribute("aria-selected", String(which === "audit"));
     $("tabChanges").setAttribute("aria-selected", String(which === "changes"));
     $("tabPending").setAttribute("aria-selected", String(which === "pending")); $("tabMine").setAttribute("aria-selected", String(which === "mine"));
+    $("tabDeliveryNotes").setAttribute("aria-selected", String(which === "deliveryNotes"));
     $("tabInvoices").setAttribute("aria-selected", String(which === "invoices"));
-    $("viewDashboard").hidden = which !== "dashboard"; $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes"; $("viewPending").hidden = which !== "pending"; $("viewMine").hidden = which !== "mine"; $("viewInvoices").hidden = which !== "invoices";
+    $("viewDashboard").hidden = which !== "dashboard"; $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes"; $("viewPending").hidden = which !== "pending"; $("viewMine").hidden = which !== "mine"; $("viewDeliveryNotes").hidden = which !== "deliveryNotes"; $("viewInvoices").hidden = which !== "invoices";
     if (which === "dashboard") renderDashboard();
     if (which === "log") renderLog();
     if (which === "audit") renderAudit();
     if (which === "changes") renderChangeLog();
     if (which === "pending" || which === "mine") renderDispatchRequests(which);
+    if (which === "deliveryNotes") renderDeliveryNotes();
     if (which === "invoices") renderInvoices();
   }
   $("tabDashboard").onclick = () => setTab("dashboard");
   $("tabStock").onclick = () => setTab("stock"); $("tabLog").onclick = () => setTab("log"); $("tabAudit").onclick = () => { if (canManageStock()) setTab("audit"); };
   $("tabChanges").onclick = () => { if (canManageUsers()) setTab("changes"); };
   $("tabPending").onclick = () => setTab("pending"); $("tabMine").onclick = () => setTab("mine");
+  $("tabDeliveryNotes").onclick = () => { if (dispatchView.canSeeDeliveryNotes(currentRole)) setTab("deliveryNotes"); };
   $("tabInvoices").onclick = () => { if (canManageInvoices()) setTab("invoices"); };
   $("dashboardRefresh").onclick = reload;
   $("dashboardReorderLink").onclick = () => { statusFilter = "red"; setTab("stock"); renderAlerts(); renderList(); };
@@ -618,9 +623,19 @@
     return "รอ INV";
   }
   function requestInvoiceState(request) {
-    if (request.status !== "approved") return "";
-    const lines = requestLines(request.id), done = lines.filter(l => l.invoice_id || l.no_invoice_reason).length;
-    return !done ? "รอ INV" : done < lines.length ? "INV บางส่วน" : "ครบ";
+    return dispatchView.invoiceState(request, dispatchLines);
+  }
+
+  function deliveryNoteCard(request) {
+    const lines = requestLines(request.id), printLabel = dispatchView.printLabel(request.status);
+    return `<article class="request-card" data-request="${esc(request.id)}"><div class="request-head"><div><b>${esc(request.delivery_note_no || "ฉบับเดิม")}</b><small>${esc(request.customer || "ไม่ระบุลูกค้า")} · ${esc(thDate(request.document_date))} · ${esc(staffNames[request.requester_id] || "พนักงาน")}</small></div><div class="request-statuses"><span class="tag">${esc(requestStatusLabel[request.status] || request.status)}</span>${request.status === "approved" ? `<span class="tag">${esc(requestInvoiceState(request))}</span>` : ""}</div></div><div class="request-lines">${lines.map(line => `<label><span>${esc(itemName(items.get(line.item_id)))}<small>${fmt(line.approved_qty ?? line.requested_qty)} ชิ้น${request.status === "approved" ? ` · ${esc(lineInvoiceLabel(line))}` : ""}</small></span></label>`).join("")}</div>${request.rejection_reason ? `<p class="msg">เหตุผล: ${esc(request.rejection_reason)}</p>` : ""}<div class="btnrow">${printLabel ? `<button class="btn sm" data-request-action="delivery">${esc(printLabel)}</button>` : ""}${canManageInvoices() && request.status === "approved" ? '<button class="btn sm" data-request-action="invoice">กำหนด INV</button>' : ""}</div></article>`;
+  }
+
+  function renderDeliveryNotes() {
+    if (!dispatchView.canSeeDeliveryNotes(currentRole)) return;
+    const rows = dispatchView.filterRequests(dispatchRequests, { query: $("deliveryNoteQuery").value, status: $("deliveryNoteStatus").value });
+    $("deliveryNoteCount").textContent = `${fmt(rows.length)} ใบส่งของ`;
+    $("deliveryNoteList").innerHTML = rows.length ? `<div class="requests">${rows.map(deliveryNoteCard).join("")}</div>` : '<div class="state"><h2>ไม่พบใบส่งของ</h2></div>';
   }
   function renderDispatchRequests(which) {
     const rows = which === "pending" ? dispatchRequests.filter(r => r.status === "pending" && canReviewDispatch(r)) : dispatchRequests.filter(r => r.requester_id === session?.user.id);
@@ -635,15 +650,26 @@
     }).join("")}</div>` : '<div class="state"><h2>ไม่มีคำขอ</h2></div>';
   }
 
+  function showDispatchSuccess(requestId, message) {
+    const request = dispatchRequests.find(row => row.id === requestId);
+    if (!request || request.status !== "approved") return;
+    $("dDispatchSuccess").dataset.requestId = requestId;
+    $("dispatchSuccessMessage").textContent = message;
+    openDlg($("dDispatchSuccess"));
+  }
+  $("dispatchSuccessPrint").onclick = () => openDeliveryNote($("dDispatchSuccess").dataset.requestId);
+
   async function dispatchAction(button) {
     const card = button.closest("[data-request]"), id = card.dataset.request, action = button.dataset.requestAction;
     button.disabled = true;
     try {
+      let approvedNow = false;
       if (action === "approve") {
         const inputs = [...card.querySelectorAll(".approve-qty")];
         const lines = inputs.map(i => ({ line_id: i.dataset.line, qty: Number(i.value) }));
         if (inputs.some((i, index) => !Number.isInteger(lines[index].qty) || lines[index].qty < 1 || lines[index].qty > Number(i.dataset.requested))) throw new Error("จำนวนอนุมัติต้องเป็นจำนวนเต็มและไม่เกินจำนวนที่ขอ");
         const { error } = await sb.rpc("approve_dispatch_request", { p_request_id: id, p_lines: lines }); if (error) throw error;
+        approvedNow = true;
       } else if (action === "reject") {
         const reason = window.prompt(t("ระบุเหตุผลที่ปฏิเสธ")); if (reason === null) return;
         const { error } = await sb.rpc("reject_dispatch_request", { p_request_id: id, p_reason: reason }); if (error) throw error;
@@ -654,9 +680,12 @@
       else if (action === "delivery") { openDeliveryNote(id); return; }
       else if (action === "invoice") { openInvoiceForm(null, id); return; }
       toast("บันทึกคำขอแล้ว"); await reload();
+      if (approvedNow) showDispatchSuccess(id, "อนุมัติคำขอและตัดยอดเรียบร้อยแล้ว");
     } catch (error) { toast(dbErr(error)); } finally { button.disabled = false; }
   }
   $("pendingList").onclick = e => { const b=e.target.closest("[data-request-action]"); if(b) dispatchAction(b); }; $("mineList").onclick = e => { const b=e.target.closest("[data-request-action]"); if(b) dispatchAction(b); };
+  $("deliveryNoteList").onclick = e => { const b=e.target.closest("[data-request-action]"); if(b) dispatchAction(b); };
+  $("deliveryNoteQuery").addEventListener("input", renderDeliveryNotes); $("deliveryNoteStatus").addEventListener("change", renderDeliveryNotes);
 
   function unresolvedInvoiceLines() {
     const approved = new Set(dispatchRequests.filter(r => r.status === "approved").map(r => r.id));
@@ -669,8 +698,8 @@
     const waiting = unresolvedInvoiceLines().sort((a,b) => invoiceAge(invoiceRequest(b)) - invoiceAge(invoiceRequest(a)));
     $("invoiceWaitingCount").textContent = fmt(waiting.length); $("invoiceBadge").textContent = waiting.length ? fmt(waiting.length) : "";
     const groups = new Map(); waiting.forEach(line => { const r=invoiceRequest(line); if(!groups.has(r.id)) groups.set(r.id,{request:r,lines:[]}); groups.get(r.id).lines.push(line); });
-    $("invoiceWaiting").innerHTML = groups.size ? `<div class="requests">${[...groups.values()].map(g => `<article class="request-card"><div class="request-head"><div><b>${esc(g.request.delivery_note_no)}</b><small>${esc(g.request.customer || "ไม่ระบุลูกค้า")} · ค้าง ${fmt(invoiceAge(g.request))} วัน</small></div><button class="btn sm" data-new-invoice-request="${esc(g.request.id)}">กำหนด INV</button></div><div class="request-lines">${g.lines.map(l=>`<label><span>${esc(itemName(items.get(l.item_id)))}<small>${fmt(l.approved_qty || l.requested_qty)} ชิ้น · ${esc(purposeLabel[l.purpose] || purposeLabel.sale)}</small></span>${l.purpose !== "sale" ? `<button class="btn sm" data-no-invoice="${esc(l.id)}">ไม่ต้องเปิด INV</button>` : '<span class="tag">รอ INV</span>'}</label>`).join("")}</div></article>`).join("")}</div>` : '<div class="state"><h2>ไม่มีรายการรอเปิด INV</h2></div>';
-    $("invoiceList").innerHTML = invoices.length ? `<div class="requests">${invoices.map(inv=>{const lines=dispatchLines.filter(l=>l.invoice_id===inv.id);const notes=[...new Set(lines.map(l=>invoiceRequest(l)?.delivery_note_no).filter(Boolean))];return `<article class="request-card invoice-card ${inv.status}"><div class="request-head"><div><b>${esc(inv.inv_no)}</b><small>${esc(thDate(inv.inv_date))} · ${esc(inv.customer || "ไม่ระบุลูกค้า")} · ${fmt(lines.length)} รายการ</small><small>${esc(notes.join(", ") || "ไม่มีรายการที่ผูก")}</small></div><span class="tag">${inv.status === "active" ? "ใช้งาน" : "ยกเลิก"}</span></div><div class="request-lines">${lines.map(l=>`<label><span>${esc(itemName(items.get(l.item_id)))}<small>${esc(invoiceRequest(l)?.delivery_note_no || "–")} · ${fmt(l.approved_qty || l.requested_qty)} ชิ้น</small></span>${inv.status === "active" ? `<button class="btn sm" data-detach-invoice="${esc(l.id)}">ถอด</button>` : ""}</label>`).join("")}</div>${inv.status === "active" ? `<div class="btnrow"><button class="btn sm" data-edit-invoice="${esc(inv.id)}">แก้ไข / เพิ่มรายการ</button><button class="btn danger sm" data-cancel-invoice="${esc(inv.id)}">ยกเลิก INV</button></div>` : ""}</article>`}).join("")}</div>` : '<div class="state"><h2>ยังไม่มี INV</h2></div>';
+    $("invoiceWaiting").innerHTML = groups.size ? `<div class="requests">${[...groups.values()].map(g => `<article class="request-card"><div class="request-head"><div><b>${esc(g.request.delivery_note_no)}</b><small>${esc(g.request.customer || "ไม่ระบุลูกค้า")} · ค้าง ${fmt(invoiceAge(g.request))} วัน</small></div><div class="btnrow"><button class="btn sm" data-print-request="${esc(g.request.id)}">พิมพ์ / บันทึก PDF</button><button class="btn sm" data-new-invoice-request="${esc(g.request.id)}">กำหนด INV</button></div></div><div class="request-lines">${g.lines.map(l=>`<label><span>${esc(itemName(items.get(l.item_id)))}<small>${fmt(l.approved_qty || l.requested_qty)} ชิ้น · ${esc(purposeLabel[l.purpose] || purposeLabel.sale)}</small></span>${l.purpose !== "sale" ? `<button class="btn sm" data-no-invoice="${esc(l.id)}">ไม่ต้องเปิด INV</button>` : '<span class="tag">รอ INV</span>'}</label>`).join("")}</div></article>`).join("")}</div>` : '<div class="state"><h2>ไม่มีรายการรอเปิด INV</h2></div>';
+    $("invoiceList").innerHTML = invoices.length ? `<div class="requests">${invoices.map(inv=>{const lines=dispatchLines.filter(l=>l.invoice_id===inv.id);const requests=[...new Map(lines.map(l=>{const r=invoiceRequest(l);return r?[r.id,r]:null}).filter(Boolean)).values()];const notes=requests.map(r=>r.delivery_note_no).filter(Boolean);return `<article class="request-card invoice-card ${inv.status}"><div class="request-head"><div><b>${esc(inv.inv_no)}</b><small>${esc(thDate(inv.inv_date))} · ${esc(inv.customer || "ไม่ระบุลูกค้า")} · ${fmt(lines.length)} รายการ</small><small>${esc(notes.join(", ") || "ไม่มีรายการที่ผูก")}</small></div><span class="tag">${inv.status === "active" ? "ใช้งาน" : "ยกเลิก"}</span></div><div class="request-lines">${lines.map(l=>`<label><span>${esc(itemName(items.get(l.item_id)))}<small>${esc(invoiceRequest(l)?.delivery_note_no || "–")} · ${fmt(l.approved_qty || l.requested_qty)} ชิ้น</small></span>${inv.status === "active" ? `<button class="btn sm" data-detach-invoice="${esc(l.id)}">ถอด</button>` : ""}</label>`).join("")}</div><div class="btnrow">${requests.map(r=>`<button class="btn sm" data-print-request="${esc(r.id)}">พิมพ์ ${esc(r.delivery_note_no || "ใบส่งของ")}</button>`).join("")}${inv.status === "active" ? `<button class="btn sm" data-edit-invoice="${esc(inv.id)}">แก้ไข / เพิ่มรายการ</button><button class="btn danger sm" data-cancel-invoice="${esc(inv.id)}">ยกเลิก INV</button>` : ""}</div></article>`}).join("")}</div>` : '<div class="state"><h2>ยังไม่มี INV</h2></div>';
     const noInvoice = dispatchLines.filter(l => l.no_invoice_reason && invoiceRequest(l)?.status === "approved");
     $("noInvoiceList").innerHTML = noInvoice.length ? `<div class="requests">${noInvoice.map(l=>`<article class="request-card"><div class="request-head"><div><b>${esc(itemName(items.get(l.item_id)))}</b><small>${esc(invoiceRequest(l)?.delivery_note_no || "–")} · ${fmt(l.approved_qty || l.requested_qty)} ชิ้น</small><small>${esc(l.no_invoice_reason)}</small></div><button class="btn sm" data-clear-no-invoice="${esc(l.id)}">เปลี่ยนเป็นรอ INV</button></div></article>`).join("")}</div>` : '<div class="state"><h2>ไม่มีรายการ</h2></div>';
   }
@@ -695,7 +724,7 @@
   $("newInvoiceBtn").onclick=()=>openInvoiceForm();
   $("invCustomer").addEventListener("input",()=>{if($("invoicePicker").querySelector('input:checked'))updateInvoiceCustomerWarning();else renderInvoicePicker();}); $("invoicePicker").addEventListener("change",updateInvoiceCustomerWarning);
   $("invSave").onclick=async()=>{if(!canManageInvoices())return;const id=$("dInvoice").dataset.invoiceId,lines=[...$("invoicePicker").querySelectorAll('input:checked')].map(x=>x.value);$("invMsg").textContent="";$("invSave").disabled=true;try{let error;if(id){({error}=await sb.rpc("update_invoice",{p_invoice_id:id,p_inv_no:$("invNo").value,p_inv_date:$("invDate").value,p_customer:$("invCustomer").value}));if(!error&&lines.length)({error}=await sb.rpc("attach_invoice_lines",{p_invoice_id:id,p_line_ids:lines}));}else{if(!lines.length)throw new Error("เลือกรายการอย่างน้อยหนึ่งรายการ");({error}=await sb.rpc("create_invoice",{p_inv_no:$("invNo").value,p_inv_date:$("invDate").value,p_customer:$("invCustomer").value,p_line_ids:lines}));}if(error)throw error;$("dInvoice").close();toast("บันทึก INV แล้ว");await reload();setTab("invoices");}catch(error){$("invMsg").textContent=dbErr(error);}finally{$("invSave").disabled=false;}};
-  $("viewInvoices").addEventListener("click",async e=>{const newBtn=e.target.closest("[data-new-invoice-request]"),edit=e.target.closest("[data-edit-invoice]"),detach=e.target.closest("[data-detach-invoice]"),cancel=e.target.closest("[data-cancel-invoice]"),noInv=e.target.closest("[data-no-invoice]"),clearNoInv=e.target.closest("[data-clear-no-invoice]");if(newBtn)return openInvoiceForm(null,newBtn.dataset.newInvoiceRequest);if(edit)return openInvoiceForm(edit.dataset.editInvoice);try{if(detach){if(!confirm(t("ถอดรายการนี้ออกจาก INV?")))return;const{error}=await sb.rpc("detach_invoice_line",{p_line_id:detach.dataset.detachInvoice});if(error)throw error;}else if(cancel){if(!confirm(t("ยกเลิก INV และคืนทุกรายการเป็นรอ INV?")))return;const{error}=await sb.rpc("cancel_invoice",{p_invoice_id:cancel.dataset.cancelInvoice});if(error)throw error;}else if(noInv){const reason=prompt(t("เหตุผลที่ไม่ต้องเปิด INV"));if(reason===null)return;const{error}=await sb.rpc("mark_line_no_invoice",{p_line_id:noInv.dataset.noInvoice,p_reason:reason});if(error)throw error;}else if(clearNoInv){if(!confirm(t("เปลี่ยนรายการนี้กลับเป็นรอ INV?")))return;const{error}=await sb.rpc("clear_line_no_invoice",{p_line_id:clearNoInv.dataset.clearNoInvoice});if(error)throw error;}else return;await reload();renderInvoices();}catch(error){toast(dbErr(error));}});
+  $("viewInvoices").addEventListener("click",async e=>{const print=e.target.closest("[data-print-request]"),newBtn=e.target.closest("[data-new-invoice-request]"),edit=e.target.closest("[data-edit-invoice]"),detach=e.target.closest("[data-detach-invoice]"),cancel=e.target.closest("[data-cancel-invoice]"),noInv=e.target.closest("[data-no-invoice]"),clearNoInv=e.target.closest("[data-clear-no-invoice]");if(print)return openDeliveryNote(print.dataset.printRequest);if(newBtn)return openInvoiceForm(null,newBtn.dataset.newInvoiceRequest);if(edit)return openInvoiceForm(edit.dataset.editInvoice);try{if(detach){if(!confirm(t("ถอดรายการนี้ออกจาก INV?")))return;const{error}=await sb.rpc("detach_invoice_line",{p_line_id:detach.dataset.detachInvoice});if(error)throw error;}else if(cancel){if(!confirm(t("ยกเลิก INV และคืนทุกรายการเป็นรอ INV?")))return;const{error}=await sb.rpc("cancel_invoice",{p_invoice_id:cancel.dataset.cancelInvoice});if(error)throw error;}else if(noInv){const reason=prompt(t("เหตุผลที่ไม่ต้องเปิด INV"));if(reason===null)return;const{error}=await sb.rpc("mark_line_no_invoice",{p_line_id:noInv.dataset.noInvoice,p_reason:reason});if(error)throw error;}else if(clearNoInv){if(!confirm(t("เปลี่ยนรายการนี้กลับเป็นรอ INV?")))return;const{error}=await sb.rpc("clear_line_no_invoice",{p_line_id:clearNoInv.dataset.clearNoInvoice});if(error)throw error;}else return;await reload();renderInvoices();}catch(error){toast(dbErr(error));}});
 
   function renderAudit() {
     if (!canManageStock()) return;
@@ -757,6 +786,7 @@
     if (!$("viewChanges").hidden) renderChangeLog();
     if (!$("viewPending").hidden) renderDispatchRequests("pending");
     if (!$("viewMine").hidden) renderDispatchRequests("mine");
+    if (!$("viewDeliveryNotes").hidden) renderDeliveryNotes();
     if (!$("viewInvoices").hidden) renderInvoices();
     if ($("dItem").open && $("dItem").dataset.id && items.has($("dItem").dataset.id)) openItem($("dItem").dataset.id);
   }
@@ -1124,15 +1154,17 @@
   $("erConfirm").onclick = async () => {
     if (!entryDraft) return;
     $("erConfirm").disabled = true;
-    let error;
+    let error, savedRequestId = "";
     if (entryDraft.kind === "out") {
       const args = { p_document_date: entryDraft.date, p_delivery_date: entryDraft.deliveryDate, p_customer: $("eCust").value.trim(), p_doc_no: entryDraft.rows[0]?.doc_no || "", p_dept: $("eDept").value.trim(), p_sale: $("eSale").value.trim(), p_note: $("eNote").value.trim(), p_lines: entryDraft.rows.map(r => ({ item_id: r.item_id, qty: r.qty, purpose: r.purpose, return_required: r.return_required, line_note: r.line_note })) };
       const requestId = entryDraft.requestId;
-      ({ error } = requestId ? await sb.rpc("update_dispatch_request", { p_request_id: requestId, ...args }) : await sb.rpc("create_dispatch_request", args));
+      const result = requestId ? await sb.rpc("update_dispatch_request", { p_request_id: requestId, ...args }) : await sb.rpc("create_dispatch_request", args);
+      error = result.error; savedRequestId = requestId || result.data || "";
     } else ({ error } = await sb.from("movements").insert(entryDraft.rows));
     $("erConfirm").disabled = false;
     if (error) { $("erMsg").textContent = dbErr(error); return; }
-    const saved = entryDraft; entryDraft = null; $("dEntryReview").close(); toast(saved.kind === "out" && ["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิกแล้ว" : `${saved.kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า"}แล้ว ${saved.rows.length} รายการ`); reload();
+    const saved = entryDraft; entryDraft = null; $("dEntryReview").close(); toast(saved.kind === "out" && ["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิกแล้ว" : `${saved.kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า"}แล้ว ${saved.rows.length} รายการ`); await reload();
+    if (saved.kind === "out" && ["owner","founder"].includes(currentRole) && savedRequestId) showDispatchSuccess(savedRequestId, "เบิกสินค้าและตัดยอดเรียบร้อยแล้ว");
   };
 
   function openRequestEdit(id) {

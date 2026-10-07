@@ -228,6 +228,8 @@ body.scanner-open{overflow:hidden}
 @media (max-width:850px){.dashboard-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-grid{grid-template-columns:1fr}}
 @media (max-width:480px){.dashboard-cards{grid-template-columns:1fr}.dashboard-card{padding:13px}.dashboard-grid{margin-bottom:110px}.dashboard-panel{padding:13px}}
 .invoice-summary small,.invoice-summary b{display:block}.invoice-summary small{color:var(--muted)}.invoice-summary b{font-size:1.8rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.delivery-note-tools{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:10px;align-items:end;margin-top:8px}.delivery-note-tools .search{margin-top:0}.delivery-note-tools select{min-height:52px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.request-statuses{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}.request-head>.btnrow{margin:0}
 .invoice-card.cancelled{opacity:.68}.invoice-pick-title{margin-top:18px}.invoice-group{border:1px solid var(--line);border-radius:12px;margin:10px 0;padding:8px 12px}.invoice-group legend{padding:0 6px;font-weight:600;font-size:.88rem}.invoice-group label{display:flex;gap:8px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid var(--line)}.invoice-group label:last-child{border-bottom:0}.invoice-group input{margin-top:5px}
 
 /* Phase 3: compact responsive workflow */
@@ -337,6 +339,7 @@ dialog{box-shadow:0 24px 80px rgba(0,0,0,.2)}
   .who .theme-switch{width:36px;height:36px;min-height:36px;padding:7px}
   .search{margin-top:18px}.search input{font-size:.95rem}
   .item{padding:14px}.filters{margin-bottom:12px}
+  .delivery-note-tools{grid-template-columns:1fr}.delivery-note-tools select{width:100%}
   .manual-dialog{width:100%;height:100%;max-height:none;margin:0;border-radius:0}.manual-layout{display:block;overflow:auto}.manual-toc{max-height:28vh;border-right:0;border-bottom:1px solid var(--line)}.manual-content{overflow:visible;padding:18px}.manual-dialog .dlg-head{position:sticky;top:0;z-index:2;background:var(--surface)}
 }
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}

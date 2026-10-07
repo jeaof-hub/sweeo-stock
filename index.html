@@ -56,6 +56,7 @@
       <button class="tab" role="tab" id="tabLog" aria-selected="false" type="button">ประวัติรับเข้า/ส่งออก</button>
       <button class="tab" role="tab" id="tabPending" aria-selected="false" type="button" hidden>รออนุมัติ <span id="pendingBadge"></span></button>
       <button class="tab" role="tab" id="tabMine" aria-selected="false" type="button" hidden>คำขอของฉัน</button>
+      <button class="tab" role="tab" id="tabDeliveryNotes" aria-selected="false" type="button" hidden>ใบส่งของ</button>
       <button class="tab" role="tab" id="tabInvoices" aria-selected="false" type="button" hidden>INV <span id="invoiceBadge"></span></button>
       <button class="tab" role="tab" id="tabAudit" aria-selected="false" type="button" hidden>รายการที่ถูกลบ</button>
       <button class="tab" role="tab" id="tabChanges" aria-selected="false" type="button" hidden>บันทึกการเปลี่ยนแปลง</button>
@@ -116,6 +117,13 @@
 
   <section id="viewPending" hidden><div class="count"><span id="pendingCount"></span></div><div id="pendingList"></div></section>
   <section id="viewMine" hidden><div class="count"><span id="mineCount"></span></div><div id="mineList"></div></section>
+  <section id="viewDeliveryNotes" hidden>
+    <div class="delivery-note-tools">
+      <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="deliveryNoteQuery" type="search" placeholder="ค้นหาเลขใบส่งของ ลูกค้า หรือวันที่" autocomplete="off" aria-label="ค้นหาใบส่งของ"></div>
+      <select id="deliveryNoteStatus" aria-label="สถานะใบส่งของ"><option value="">ทุกสถานะ</option><option value="pending">รออนุมัติ</option><option value="approved">อนุมัติแล้ว</option><option value="rejected">ปฏิเสธแล้ว</option><option value="cancelled">ยกเลิก</option></select>
+    </div>
+    <div class="count"><span id="deliveryNoteCount"></span></div><div id="deliveryNoteList"></div>
+  </section>
   <section id="viewInvoices" hidden>
     <div class="invoice-summary"><div><small>รายการรอเปิด INV</small><b id="invoiceWaitingCount">0</b></div><button class="btn primary" id="newInvoiceBtn" type="button">บันทึก INV</button></div>
     <h2 class="view-title">รอเปิด INV</h2><div id="invoiceWaiting"></div>
@@ -292,6 +300,11 @@
   <div class="dlg-foot"><span class="msg" id="kMsg"></span><button class="btn" type="button" data-close>ไม่ลบ</button><button class="btn danger" type="button" id="kOk">ลบรายการ</button></div>
 </div></dialog>
 
+<dialog id="dDispatchSuccess" aria-labelledby="dispatchSuccessTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="dispatchSuccessTitle">บันทึกสำเร็จ</h2><p id="dispatchSuccessMessage"></p></div><button class="btn x" type="button" data-close>ปิด</button></div>
+  <div class="dlg-foot"><button class="btn" type="button" data-close>ปิด</button><button class="btn primary" type="button" id="dispatchSuccessPrint">พิมพ์ใบส่งของ</button></div>
+</div></dialog>
+
 <dialog id="dInstall" aria-labelledby="installTitle"><div class="dlg install-dialog">
   <div class="dlg-head"><div><h2 id="installTitle">ติดตั้งแอป SWEEO Stock</h2><p>เปิดระบบได้สะดวกจากหน้าจอหลัก</p></div><button class="btn" type="button" data-close>ปิด</button></div>
   <div class="install-steps">
@@ -320,6 +333,7 @@
 <script src="scanner.js?v=phase-5-3"></script>
 <script src="realtime-lifecycle.js?v=1"></script>
 <script src="manual.js?v=1"></script>
+<script src="dispatch-view.js?v=1"></script>
 <script src="app.js?v=realtime-1"></script>
 </body>
 </html>

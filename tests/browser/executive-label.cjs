@@ -36,7 +36,7 @@ const mockClient = `window.supabase={createClient(){
    await page.goto(base,{waitUntil:'networkidle'});
    await page.waitForFunction(label=>document.querySelector('#roleBadge')?.textContent===label,expected[lang]);
    assert.equal(await page.locator('#roleBadge').textContent(),expected[lang]);
-   for(const selector of ['#actions','#newItemBtn','#outBtn','#inBtn','#exportBtn','#auditMenuBtn','#changesMenuBtn','#tabPending','#tabMine','#tabInvoices']){
+   for(const selector of ['#actions','#newItemBtn','#outBtn','#inBtn','#exportBtn','#auditMenuBtn','#changesMenuBtn','#tabPending','#tabMine','#tabDeliveryNotes','#tabInvoices']){
     assert.equal(await page.locator(selector).evaluate(element=>element.hidden),true,`${lang} exposes ${selector}`);
    }
    assert.equal(await page.evaluate(()=>testDbCalls.includes('from:invoices')),false,`${lang} fetched hidden invoices`);

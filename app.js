@@ -1174,19 +1174,48 @@
     requestLines(id).forEach(l=>{const line=addLine(l.item_id); line.querySelector(".qtyin").value=l.requested_qty; line.querySelector(".purpose").value=l.purpose||"sale"; line.querySelector(".return-required").checked=!!l.return_required; line.querySelector(".line-note").value=l.line_note||""; updateLineInfo(line);});
   }
 
-  function deliveryDocumentHtml(request) {
+  function deliveryDocumentParts(request) {
     const purposeNames = Object.fromEntries(Object.entries(purposeLabel).map(([key,value]) => [key,t(value)]));
-    return window.SWEEO_DELIVERY.buildDocument({
+    return window.SWEEO_DELIVERY.buildParts({
       request, lines: requestLines(request.id), itemById: id => items.get(id), staffNames,
       purposeNames, lang: window.SWEEO_I18N?.lang || "th",
       formatNumber: fmt, formatDate: thDate
     });
   }
+  let deliveryNoteHistoryId = null, deliveryNoteScrollY = 0;
+  if (history.state?.sweeoDeliveryNote) {
+    const cleanState={...history.state}; delete cleanState.deliveryNote; delete cleanState.sweeoDeliveryNote;
+    try { history.replaceState(cleanState,''); } catch (_) {}
+  }
+  function deliveryNoteIsOpen() { return !$('deliveryNoteOverlay').hidden; }
+  function hideDeliveryNote({ fromHistory = false } = {}) {
+    if (!deliveryNoteIsOpen()) return;
+    $('deliveryNoteOverlay').hidden = true;
+    document.body.classList.remove('delivery-note-open');
+    const ownsHistory = deliveryNoteHistoryId && history.state?.sweeoDeliveryNote === deliveryNoteHistoryId;
+    deliveryNoteHistoryId = null;
+    requestAnimationFrame(() => window.scrollTo(0, deliveryNoteScrollY));
+    if (ownsHistory && !fromHistory) history.back();
+  }
   function openDeliveryNote(id) {
     const request=dispatchRequests.find(r=>r.id===id); if(!request || !["pending","approved"].includes(request.status)) return;
-    const win=window.open("","_blank"); if(!win){toast("เบราว์เซอร์ปิดกั้นหน้าพิมพ์ กรุณาอนุญาต Pop-up"); return;}
-    win.document.open(); win.document.write(deliveryDocumentHtml(request)); win.document.close();
+    const parts=deliveryDocumentParts(request);
+    deliveryNoteScrollY=window.scrollY;
+    $('deliveryNoteOverlayTitle').textContent=parts.title;
+    $('deliveryNoteContent').innerHTML=`<style>${parts.css}</style>${parts.html}`;
+    $('deliveryNoteScroll').scrollTo(0,0);
+    $('deliveryNoteOverlay').hidden=false;
+    document.body.classList.add('delivery-note-open');
+    if (!deliveryNoteHistoryId) {
+      deliveryNoteHistoryId=`delivery-note-${Date.now()}`;
+      try { history.pushState({ ...history.state, deliveryNote:true, sweeoDeliveryNote:deliveryNoteHistoryId }, ''); }
+      catch (_) { deliveryNoteHistoryId=null; }
+    }
   }
+  $('deliveryNoteBack').onclick=()=>hideDeliveryNote();
+  $('deliveryNotePrint').onclick=async()=>{ if(deliveryNoteIsOpen()){ await document.fonts?.ready; window.print(); } };
+  window.addEventListener('popstate',()=>{ if(deliveryNoteIsOpen() && history.state?.sweeoDeliveryNote!==deliveryNoteHistoryId) hideDeliveryNote({fromHistory:true}); });
+  window.addEventListener('keydown',event=>{ if(event.key==='Escape' && deliveryNoteIsOpen()){event.preventDefault();hideDeliveryNote();} });
 
   /* ---------- count adjust ---------- */
   function openCount(id) {

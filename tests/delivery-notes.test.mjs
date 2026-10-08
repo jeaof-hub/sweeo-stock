@@ -47,6 +47,11 @@ test('app connects print actions to approval, immediate dispatch and INV cards',
   assert.match(app, /showDispatchSuccess\(savedRequestId, "เบิกสินค้าและตัดยอดเรียบร้อยแล้ว"\)/);
   assert.match(app, /data-print-request=/);
   assert.match(app, /approved_qty \?\? line\.requested_qty/);
+  assert.doesNotMatch(app, /window\.open\(/);
+  assert.match(app, /history\.pushState\(\{ \.\.\.history\.state, deliveryNote:true/);
+  assert.match(app, /window\.addEventListener\('popstate'/);
+  assert.match(app, /window\.addEventListener\('keydown'/);
+  assert.match(app, /\$\('deliveryNotePrint'\)\.onclick=.*window\.print/);
 });
 
 test('delivery-note counts translate in English and Traditional Chinese', () => {

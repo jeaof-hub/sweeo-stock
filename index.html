@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=realtime-1">
+<link rel="stylesheet" href="style.css?v=delivery-overlay-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -142,6 +142,15 @@
   <button class="btn primary" type="button" id="outBtn">เบิกสินค้า</button>
   <button class="btn" type="button" id="inBtn">บันทึกรับเข้า</button>
 </div></div>
+
+<div id="deliveryNoteOverlay" class="delivery-note-overlay" hidden aria-label="ใบส่งของ">
+  <div class="delivery-note-toolbar">
+    <button class="btn delivery-note-back" id="deliveryNoteBack" type="button">← กลับ</button>
+    <strong id="deliveryNoteOverlayTitle">ใบส่งของ</strong>
+    <button class="btn primary delivery-note-print" id="deliveryNotePrint" type="button">พิมพ์ / บันทึก PDF</button>
+  </div>
+  <div class="delivery-note-scroll" id="deliveryNoteScroll"><div id="deliveryNoteContent"></div></div>
+</div>
 
 <dialog id="dLogin" aria-labelledby="lgTitle"><div class="dlg">
   <div class="dlg-head"><div><h2 id="lgTitle">เข้าสู่ระบบ</h2><p>สำหรับพนักงานที่ได้รับบัญชีจากผู้ดูแลระบบ</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
@@ -329,11 +338,11 @@
 <script src="i18n-zh-TW.js?v=realtime-1"></script>
 <script src="i18n.js?v=realtime-1"></script>
 <script src="pwa.js?v=1"></script>
-<script src="delivery-note.js?v=zh-TW-1"></script>
+<script src="delivery-note.js?v=overlay-1"></script>
 <script src="scanner.js?v=phase-5-3"></script>
 <script src="realtime-lifecycle.js?v=1"></script>
 <script src="manual.js?v=1"></script>
 <script src="dispatch-view.js?v=1"></script>
-<script src="app.js?v=realtime-1"></script>
+<script src="app.js?v=delivery-overlay-1"></script>
 </body>
 </html>

@@ -59,7 +59,8 @@ test("service worker keeps the offline shell without relying on cache version ch
   assert.match(pwa, /updatefound/);
   assert.match(pwa, /controllerchange/);
   assert.match(pwa, /SKIP_WAITING/);
-  for (const required of ["./index.html", "./style.css?v=realtime-1", "./app.js?v=realtime-1", "./pwa.js?v=1", "./site.webmanifest"]) assert.ok(source.includes(`"${required}"`), `${required} missing from shell`);
+  for (const required of ["./index.html", "./style.css?v=delivery-overlay-1", "./app.js?v=delivery-overlay-1", "./delivery-note.js?v=overlay-1", "./pwa.js?v=1", "./site.webmanifest"]) assert.ok(source.includes(`"${required}"`), `${required} missing from shell`);
+  assert.match(source, /const CACHE_NAME = "sweeo-shell-v3"/);
 });
 
 function createWorkerHarness(fetchImpl, cached = new Map()) {

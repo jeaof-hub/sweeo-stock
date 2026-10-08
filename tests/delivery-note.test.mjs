@@ -6,6 +6,7 @@ import { test } from "node:test";
 const context = { window: {} };
 vm.runInNewContext(readFileSync(new URL("../delivery-note.js", import.meta.url), "utf8"), context);
 const buildDocument = context.window.SWEEO_DELIVERY.buildDocument;
+const buildParts = context.window.SWEEO_DELIVERY.buildParts;
 const base = {
   request: { id:"request-1", status:"approved", requester_id:"user-1", document_date:"2026-09-25", delivery_date:"2026-09-26", delivery_note_no:"TD-20260925-00001", customer:"Triple P", doc_no:"INV-1", note:"Handle carefully" },
   lines: [{ item_id:"item-1", code:"5991301118T", model:"LRM-KitW2228", requested_qty:50, approved_qty:40, purpose:"sale", return_required:false, line_note:"Boxed" }],
@@ -24,7 +25,16 @@ test("approved delivery note uses approved quantity and creates original plus co
   assert.match(html,/ต้นฉบับ/); assert.match(html,/สำเนา/); assert.match(html,/TD-20260925-00001/);
   assert.match(html,/LASTER TECH \(THAILAND\) CO\., LTD\./);
   assert.doesNotMatch(html,/SWEEO TECHNOLOGY CO\., LTD\./);
-  assert.match(html,/footer\{position:absolute;[^}]*bottom:2mm/);
+  assert.match(html,/\.sweeo-dn footer\{position:absolute;[^}]*bottom:2mm/);
+});
+
+test("embedded document parts are scoped and never print automatically", () => {
+  const parts=buildParts({ ...base, lang:"th" });
+  assert.match(parts.html,/^<div class="sweeo-dn"/);
+  assert.match(parts.css,/\.sweeo-dn table\{/);
+  assert.doesNotMatch(parts.css,/(^|[},])\s*(body|table|header|footer)\s*\{/m);
+  assert.doesNotMatch(parts.html+parts.css,/window\.print|<iframe/i);
+  assert.doesNotMatch(buildDocument({ ...base }),/window\.print/);
 });
 
 test("more than ten products continue on numbered pages with ten rows each", () => {

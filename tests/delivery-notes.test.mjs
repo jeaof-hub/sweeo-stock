@@ -51,7 +51,10 @@ test('app connects print actions to approval, immediate dispatch and INV cards',
   assert.match(app, /history\.pushState\(\{ \.\.\.history\.state, deliveryNote:true/);
   assert.match(app, /window\.addEventListener\('popstate'/);
   assert.match(app, /window\.addEventListener\('keydown'/);
-  assert.match(app, /\$\('deliveryNotePrint'\)\.onclick=.*window\.print/);
+  assert.match(app, /button\.onclick=function\(\)\{ window\.print\(\); \}/);
+  assert.doesNotMatch(app, /deliveryNotePrint'\)\.onclick=async/);
+  assert.match(app, /setTimeout\(resolve,3000\)/);
+  assert.match(app, /const sharing=navigator\.share\(/);
 });
 
 test('delivery-note counts translate in English and Traditional Chinese', () => {

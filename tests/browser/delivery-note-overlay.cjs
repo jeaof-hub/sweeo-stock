@@ -13,7 +13,8 @@ const requests = [
  {id:'req-pending',status:'pending',requester_id:'owner-user',requester_role:'owner',document_date:'2026-10-08',delivery_date:'2026-10-08',delivery_note_no:'TD-00002',customer:'Pending customer',doc_no:'',note:'',created_at:'2026-10-08T03:00:00Z'}
 ];
 const lines = requests.map((request,index)=>({id:'line-'+index,request_id:request.id,item_id:'item-1',requested_qty:50,approved_qty:request.status==='approved'?40:null,purpose:'sale',return_required:false,line_note:''}));
-const mockClient = `window.testPrintCount=0;window.print=()=>window.testPrintCount++;
+const mockClient = `window.testPrintCount=0;window.testShares=[];window.print=()=>window.testPrintCount++;
+navigator.share=data=>{window.testShares.push(data);return Promise.resolve()};navigator.canShare=()=>true;
 window.supabase={createClient(){
  const tables={items:[{id:'item-1',active:true,code:'5991301118T',model:'LRM-KitW2228',spec:'SWEEO LED Circular 22W',type:'Retail',dept:'Retail',opening:100,avg_month:1,rop:1}],movements:[],stock_audit:[],dispatch_requests:${JSON.stringify(requests)},dispatch_request_lines:${JSON.stringify(lines)},invoices:[]};
  function query(data,name){const q={then(a,b){return Promise.resolve({data,error:null}).then(a,b)}};for(const k of ['select','eq','is','not','order','range','limit','abortSignal'])q[k]=()=>q;return q;}
@@ -30,7 +31,8 @@ window.supabase={createClient(){
  const browser=await chromium.launch({headless:true,executablePath:chrome});
  try {
   for(const device of [{name:'iphone-safari',width:390,height:844,isMobile:true,hasTouch:true},{name:'iphone-pwa',width:390,height:844,isMobile:true,hasTouch:true,standalone:true},{name:'android-chrome',width:412,height:915,isMobile:true,hasTouch:true},{name:'android-pwa',width:412,height:915,isMobile:true,hasTouch:true,standalone:true},{name:'desktop-chrome',width:1280,height:900,isMobile:false,hasTouch:false}]){
-   const page=await browser.newPage({viewport:{width:device.width,height:device.height},isMobile:device.isMobile,hasTouch:device.hasTouch,reducedMotion:'reduce'});
+   const userAgent=device.name.startsWith('iphone')?'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1':device.name.startsWith('android')?'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/154 Mobile Safari/537.36':undefined;
+   const page=await browser.newPage({viewport:{width:device.width,height:device.height},isMobile:device.isMobile,hasTouch:device.hasTouch,reducedMotion:'reduce',...(userAgent?{userAgent}:{})});
    const errors=[];page.on('pageerror',error=>errors.push(error.message));
    if(device.standalone) await page.addInitScript(()=>{
     Object.defineProperty(navigator,'standalone',{configurable:true,value:true});
@@ -38,7 +40,7 @@ window.supabase={createClient(){
     window.matchMedia=query=>query==='(display-mode: standalone)'?{matches:true,media:query,addEventListener(){},removeEventListener(){}}:original(query);
    });
    await page.route('https://fonts.googleapis.com/**',route=>route.abort());
-   await page.route('https://cdnjs.cloudflare.com/**',route=>route.fulfill({body:''}));
+   await page.route('https://cdnjs.cloudflare.com/**',route=>/\/(html2canvas\/1\.4\.1\/html2canvas\.min|jspdf\/2\.5\.1\/jspdf\.umd\.min)\.js$/.test(route.request().url())?route.continue():route.fulfill({body:''}));
    await page.route('**/supabase.js',route=>route.fulfill({contentType:'application/javascript',body:mockClient}));
    await page.goto(base,{waitUntil:'networkidle'});
    await page.waitForFunction(()=>!document.querySelector('#tabDeliveryNotes').hidden);
@@ -52,8 +54,16 @@ window.supabase={createClient(){
    await page.evaluate(()=>testChannelEvent());
    await page.waitForTimeout(900);
    assert.equal(await page.locator('#deliveryNoteOverlay').evaluate(el=>el.hidden),false,'realtime reload closed overlay');
+   await page.waitForFunction(()=>!document.querySelector('#deliveryNotePrint').disabled);
    await page.click('#deliveryNotePrint');
-   assert.equal(await page.evaluate(()=>testPrintCount),1);
+   if(device.name==='iphone-pwa'){
+    assert.equal(await page.evaluate(()=>testShares.length),1);
+    assert.equal(await page.evaluate(()=>testShares[0].files[0].name),'TD-00001.pdf');
+    assert.equal(await page.evaluate(()=>testShares[0].files[0].type),'application/pdf');
+    const bytes=await page.evaluate(async()=>Array.from(new Uint8Array(await testShares[0].files[0].arrayBuffer())));
+    assert.equal(String.fromCharCode(...bytes.slice(0,4)),'%PDF');
+    fs.writeFileSync(path.join(output,'shared-delivery-note.pdf'),Buffer.from(bytes));
+   }else assert.equal(await page.evaluate(()=>testPrintCount),1);
    await page.screenshot({path:path.join(output,device.name+'.png'),fullPage:false});
    if(device.name==='desktop-chrome') await page.pdf({path:path.join(output,'delivery-note.pdf'),format:'A4',landscape:true,printBackground:true});
    await page.click('#deliveryNoteBack');
@@ -63,6 +73,13 @@ window.supabase={createClient(){
    await page.locator('[data-request="req-pending"] [data-request-action="delivery"]').click();
    await page.waitForFunction(()=>!document.querySelector('#deliveryNoteOverlay').hidden);
    assert.equal(await page.locator('#deliveryNoteOverlay .draft-mark').count(),2);
+   if(device.name==='iphone-pwa'){
+    await page.waitForFunction(()=>!document.querySelector('#deliveryNotePrint').disabled);
+    await page.click('#deliveryNotePrint');
+    assert.equal(await page.evaluate(()=>testShares.length),2);
+    const pendingBytes=await page.evaluate(async()=>Array.from(new Uint8Array(await testShares[1].files[0].arrayBuffer())));
+    fs.writeFileSync(path.join(output,'shared-delivery-note-pending.pdf'),Buffer.from(pendingBytes));
+   }
    await page.goBack();
    await page.waitForFunction(()=>document.querySelector('#deliveryNoteOverlay').hidden);
    await page.locator('[data-request="req-approved"] [data-request-action="delivery"]').click();

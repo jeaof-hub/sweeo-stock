@@ -1182,7 +1182,7 @@
       formatNumber: fmt, formatDate: thDate
     });
   }
-  let deliveryNoteHistoryId = null, deliveryNoteScrollY = 0;
+  let deliveryNoteHistoryId = null, deliveryNoteScrollY = 0, deliveryPreparationId = 0, deliveryPdfFile = null;
   if (history.state?.sweeoDeliveryNote) {
     const cleanState={...history.state}; delete cleanState.deliveryNote; delete cleanState.sweeoDeliveryNote;
     try { history.replaceState(cleanState,''); } catch (_) {}
@@ -1190,12 +1190,49 @@
   function deliveryNoteIsOpen() { return !$('deliveryNoteOverlay').hidden; }
   function hideDeliveryNote({ fromHistory = false } = {}) {
     if (!deliveryNoteIsOpen()) return;
+    deliveryPreparationId++; deliveryPdfFile=null;
     $('deliveryNoteOverlay').hidden = true;
     document.body.classList.remove('delivery-note-open');
     const ownsHistory = deliveryNoteHistoryId && history.state?.sweeoDeliveryNote === deliveryNoteHistoryId;
     deliveryNoteHistoryId = null;
     requestAnimationFrame(() => window.scrollTo(0, deliveryNoteScrollY));
     if (ownsHistory && !fromHistory) history.back();
+  }
+  function useDeliveryPrintButton() {
+    const button=$('deliveryNotePrint');
+    button.disabled=false; button.textContent=t('พิมพ์ / บันทึก PDF');
+    button.onclick=function(){ window.print(); };
+  }
+  function useDeliveryShareButton(file,title) {
+    const button=$('deliveryNotePrint');
+    deliveryPdfFile=file; button.disabled=false; button.textContent=t('แชร์ / บันทึก PDF');
+    button.onclick=function(){
+      try {
+        const sharing=navigator.share({files:[deliveryPdfFile],title});
+        Promise.resolve(sharing).catch(error=>{if(error?.name!=="AbortError"){window.print();toast('แชร์ PDF ไม่สำเร็จ เปิดหน้าพิมพ์แทน');}});
+      } catch (error) { if(error?.name!=="AbortError"){window.print();toast('แชร์ PDF ไม่สำเร็จ เปิดหน้าพิมพ์แทน');} }
+    };
+  }
+  async function prepareDeliveryOutput(request) {
+    const preparationId=++deliveryPreparationId, button=$('deliveryNotePrint');
+    const shareMode=window.SWEEO_DELIVERY_PDF?.isIosStandalone()===true;
+    deliveryPdfFile=null; button.disabled=true; button.onclick=null;
+    button.textContent=t(shareMode?'กำลังเตรียม PDF…':'กำลังเตรียม…');
+    const fontReady=document.fonts?.ready || Promise.resolve();
+    await Promise.race([fontReady,new Promise(resolve=>setTimeout(resolve,3000))]);
+    if(preparationId!==deliveryPreparationId || !deliveryNoteIsOpen()) return;
+    if(!shareMode){useDeliveryPrintButton();return;}
+    try {
+      const safeName=String(request.delivery_note_no||request.id||'delivery-note').replace(/[\\/:*?"<>|]/g,'-');
+      const file=await window.SWEEO_DELIVERY_PDF.createFile($('deliveryNoteContent'),`${safeName}.pdf`);
+      if(preparationId!==deliveryPreparationId || !deliveryNoteIsOpen()) return;
+      const shareData={files:[file],title:request.delivery_note_no||t('ใบส่งของ')};
+      if(typeof navigator.share==='function' && (typeof navigator.canShare!=='function' || navigator.canShare(shareData))) useDeliveryShareButton(file,shareData.title);
+      else useDeliveryPrintButton();
+    } catch (error) {
+      if(preparationId!==deliveryPreparationId || !deliveryNoteIsOpen()) return;
+      useDeliveryPrintButton(); toast('สร้าง PDF ไม่สำเร็จ กรุณาใช้การพิมพ์แทน');
+    }
   }
   function openDeliveryNote(id) {
     const request=dispatchRequests.find(r=>r.id===id); if(!request || !["pending","approved"].includes(request.status)) return;
@@ -1211,9 +1248,9 @@
       try { history.pushState({ ...history.state, deliveryNote:true, sweeoDeliveryNote:deliveryNoteHistoryId }, ''); }
       catch (_) { deliveryNoteHistoryId=null; }
     }
+    prepareDeliveryOutput(request);
   }
   $('deliveryNoteBack').onclick=()=>hideDeliveryNote();
-  $('deliveryNotePrint').onclick=async()=>{ if(deliveryNoteIsOpen()){ await document.fonts?.ready; window.print(); } };
   window.addEventListener('popstate',()=>{ if(deliveryNoteIsOpen() && history.state?.sweeoDeliveryNote!==deliveryNoteHistoryId) hideDeliveryNote({fromHistory:true}); });
   window.addEventListener('keydown',event=>{ if(event.key==='Escape' && deliveryNoteIsOpen()){event.preventDefault();hideDeliveryNote();} });
 

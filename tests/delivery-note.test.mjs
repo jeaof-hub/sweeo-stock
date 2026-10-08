@@ -26,6 +26,8 @@ test("approved delivery note uses approved quantity and creates original plus co
   assert.match(html,/LASTER TECH \(THAILAND\) CO\., LTD\./);
   assert.doesNotMatch(html,/SWEEO TECHNOLOGY CO\., LTD\./);
   assert.match(html,/\.sweeo-dn footer\{position:absolute;[^}]*bottom:2mm/);
+  assert.equal((html.match(/class="table-bottom-rule"/g)||[]).length,2);
+  assert.match(html,/\.sweeo-dn \.table-bottom-rule\{height:1px;background:#777;margin-top:-1px/);
 });
 
 test("embedded document parts are scoped and never print automatically", () => {
@@ -43,6 +45,15 @@ test("more than ten products continue on numbered pages with ten rows each", () 
   assert.equal((html.match(/class="delivery-page"/g)||[]).length,4);
   assert.equal((html.match(/class="item-row(?: blank-row)?"/g)||[]).length,40);
   assert.match(html,/ต้นฉบับ · 2\/2/); assert.match(html,/สำเนา · 2\/2/);
+});
+
+test("exactly ten products keep the closing rule beneath row ten", () => {
+  const lines=Array.from({length:10},(_,index)=>({ ...base.lines[0], item_id:`item-${index+1}` }));
+  const html=buildDocument({ ...base, lines });
+  assert.equal((html.match(/class="delivery-page"/g)||[]).length,2);
+  assert.equal((html.match(/class="item-row"/g)||[]).length,20);
+  assert.equal((html.match(/class="item-row blank-row"/g)||[]).length,0);
+  assert.equal((html.match(/<\/tbody><\/table><div class="table-bottom-rule"/g)||[]).length,2);
 });
 
 test("pending delivery note uses requested quantity and is visibly marked draft", () => {

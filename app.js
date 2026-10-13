@@ -274,6 +274,8 @@
     $("outBtn").textContent = currentRole === "warehouse" ? "ขอเบิก" : "เบิกสินค้า";
     $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
     $("manageUsersBtn").hidden = !canManageUsers();
+    $("lineLinkBtn").hidden = !["warehouse", "admin", "owner", "founder"].includes(currentRole);
+    $("lineSettingsBtn").hidden = !canManageUsers();
     document.querySelectorAll("[data-member]").forEach(o => { o.hidden = !isMember; o.disabled = !isMember; });
     if (!isMember && ["avgDesc", "cover"].includes($("fSort").value)) $("fSort").value = "order";
     const b = $("banner");
@@ -291,6 +293,11 @@
     items = new Map(); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; dispatchRequests = []; dispatchLines = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
+    if (isMember) {
+      sb.rpc("set_my_preferred_language", { p_language: window.SWEEO_I18N?.lang || "th" }).then(() => {});
+      if (canManageUsers()) refreshLineQuota();
+      openLineDeepLink();
+    } else $("lineQuotaBanner").hidden = true;
     if (isMember) subscribe(); else { unsubscribe(); setConnectionState(navigator.onLine ? "connected" : "offline"); }
     startPolling();
   }
@@ -335,6 +342,99 @@
     $("dPw").close(); toast("เปลี่ยนรหัสผ่านแล้ว");
   });
 
+  /* ---------- LINE account and notification settings ---------- */
+  let lineSettings = null, lineCandidates = [];
+  const lineEligible = () => ["warehouse", "admin", "owner", "founder"].includes(currentRole);
+  function renderLineStatus(row) {
+    row = row || {};
+    $("lineStatusText").textContent = row.linked ? "เชื่อมต่อ LINE แล้ว" : "ยังไม่ได้เชื่อมต่อ LINE";
+    $("lineUnlink").hidden = !row.linked;
+    $("lineCreateCode").textContent = row.code ? "สร้างรหัสใหม่" : "สร้างรหัสเชื่อมต่อ";
+    $("lineCodePanel").hidden = !row.code;
+    $("lineCode").textContent = row.code || "";
+    $("lineExpiry").textContent = row.expires_at ? `รหัสหมดอายุ ${new Date(row.expires_at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}` : "";
+    $("lineAddFriend").hidden = !row.add_friend_url; $("lineAddFriend").href = row.add_friend_url || "#";
+    $("lineQr").hidden = !row.qr_image_url; if (row.qr_image_url) $("lineQr").src = row.qr_image_url;
+  }
+  async function loadLineStatus() {
+    const { data, error } = await sb.rpc("my_line_status");
+    if (error) throw error;
+    renderLineStatus(data?.[0]);
+  }
+  $("lineLinkBtn").onclick = async () => {
+    if (!lineEligible()) return;
+    $("menuPop").hidden = true; $("lineMsg").textContent = ""; openDlg($("dLine"));
+    try { await loadLineStatus(); } catch (error) { $("lineMsg").textContent = error.message; }
+  };
+  $("lineCreateCode").onclick = async () => {
+    $("lineCreateCode").disabled = true; $("lineMsg").textContent = "";
+    try { const { error } = await sb.rpc("create_line_link_code"); if (error) throw error; await loadLineStatus(); }
+    catch (error) { $("lineMsg").textContent = error.message; }
+    finally { $("lineCreateCode").disabled = false; }
+  };
+  $("lineUnlink").onclick = async () => {
+    if (!window.confirm(t("ยกเลิกการเชื่อมต่อ LINE ของบัญชีนี้?"))) return;
+    const { error } = await sb.rpc("unlink_my_line");
+    if (error) { $("lineMsg").textContent = error.message; return; }
+    await loadLineStatus(); toast("ยกเลิกการเชื่อมต่อ LINE แล้ว");
+  };
+  function paintLineUsage(settings) {
+    const used = Number(settings?.used || 0), limit = Number(settings?.push_limit || 300), ratio = limit ? used / limit : 1;
+    $("lineUsage").textContent = `${fmt(used)} / ${fmt(limit)} ข้อความ Push เดือนนี้`;
+    $("lineUsageBar").style.width = `${Math.min(100, ratio * 100)}%`;
+    $("lineUsageBar").className = ratio >= 1 ? "exceeded" : ratio >= .8 ? "warning" : "";
+  }
+  async function refreshLineQuota() {
+    if (!canManageUsers()) return;
+    const { data, error } = await sb.rpc("line_settings_view"); if (error || !data) return;
+    lineSettings = data; paintLineUsage(data);
+    const used = Number(data.used || 0), limit = Number(data.push_limit || 300), banner = $("lineQuotaBanner");
+    banner.hidden = used < limit * .8;
+    banner.textContent = used >= limit ? `LINE Push ครบเพดาน ${fmt(limit)} ข้อความแล้ว ระบบจะไม่ส่ง Push เพิ่มในเดือนนี้` : `LINE Push ใช้แล้ว ${fmt(used)} จาก ${fmt(limit)} ข้อความในเดือนนี้`;
+  }
+  function renderLineRecipients() {
+    const selected = new Set(lineSettings?.recipients || []);
+    const rows = lineCandidates.filter(u => u.is_active && u.line_linked && ["admin", "owner", "founder"].includes(u.role));
+    $("lineRecipients").innerHTML = rows.length ? rows.map(u => `<label class="line-recipient"><input type="checkbox" data-line-recipient="${esc(u.user_id)}"${selected.has(u.user_id) ? " checked" : ""}><span><b>${esc(u.name)}</b><small>@${esc(u.username || "–")} · ${esc(u.role)}</small></span></label>`).join("") : '<p class="note">ยังไม่มีผู้อนุมัติที่เชื่อม LINE</p>';
+  }
+  async function loadLineSettings() {
+    const [settings, overview] = await Promise.all([sb.rpc("line_settings_view"), sb.rpc("line_admin_overview")]);
+    if (settings.error) throw settings.error; if (overview.error) throw overview.error;
+    lineSettings = settings.data; lineCandidates = overview.data || [];
+    $("lineNotifyResults").checked = !!lineSettings.notify_requester_results;
+    $("linePushLimit").value = lineSettings.push_limit || 300;
+    $("lineAddFriendUrl").value = lineSettings.add_friend_url || ""; $("lineQrImageUrl").value = lineSettings.qr_image_url || "";
+    paintLineUsage(lineSettings); renderLineRecipients();
+  }
+  $("lineSettingsBtn").onclick = async () => {
+    if (!canManageUsers()) return;
+    $("menuPop").hidden = true; $("lineSettingsMsg").textContent = ""; openDlg($("dLineSettings"));
+    try { await loadLineSettings(); } catch (error) { $("lineSettingsMsg").textContent = error.message; }
+  };
+  $("lineSettingsSave").onclick = async () => {
+    if (!canManageUsers()) return;
+    const button = $("lineSettingsSave"); button.disabled = true; $("lineSettingsMsg").textContent = "";
+    try {
+      const { error } = await sb.rpc("update_line_settings", { p_notify_requester_results: $("lineNotifyResults").checked, p_push_limit: Number($("linePushLimit").value), p_add_friend_url: $("lineAddFriendUrl").value.trim(), p_qr_image_url: $("lineQrImageUrl").value.trim() });
+      if (error) throw error;
+      const selected = new Set([...document.querySelectorAll("[data-line-recipient]:checked")].map(x => x.dataset.lineRecipient));
+      for (const user of lineCandidates.filter(u => u.is_active && u.line_linked && ["admin", "owner", "founder"].includes(u.role))) {
+        const result = await sb.rpc("set_line_notification_recipient", { p_user_id: user.user_id, p_enabled: selected.has(user.user_id) });
+        if (result.error) throw result.error;
+      }
+      await loadLineSettings(); await refreshLineQuota(); toast("บันทึกการตั้งค่า LINE แล้ว");
+    } catch (error) { $("lineSettingsMsg").textContent = error.message; }
+    finally { button.disabled = false; }
+  };
+  function openLineDeepLink() {
+    const params = new URLSearchParams(location.search), requestId = params.get("request");
+    if (params.get("tab") !== "pending" || !requestId || !["admin", "owner", "founder"].includes(currentRole)) return;
+    setTab("pending"); requestAnimationFrame(() => {
+      const card = document.querySelector(`[data-request="${CSS.escape(requestId)}"]`);
+      if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" }); card.classList.add("deep-link-highlight"); }
+    });
+  }
+
   /* ---------- Founder / Owner: user access ---------- */
   let managedUsers = [];
   async function userAdmin(action, fields = {}) {
@@ -359,7 +459,7 @@
     box.innerHTML = managedUsers.map(u => {
       const founder = u.role === "founder";
       return `<div class="user-card" data-uid="${esc(u.user_id)}">
-        <div class="user-meta"><b>${esc(u.name)}</b><small>@${esc(u.username || "–")} · ${esc(u.email)}</small></div>
+        <div class="user-meta"><b>${esc(u.name)}</b><small>@${esc(u.username || "–")} · ${esc(u.email)}</small><small class="user-line-status${u.line_linked ? " linked" : ""}">${u.line_linked ? `LINE เชื่อมแล้ว · ${esc(u.preferred_language || "th")}` : "LINE ยังไม่เชื่อม"}</small></div>
         ${founder ? '<span class="badge founder">ผู้ก่อตั้ง</span>' : `<div class="user-controls">
           <label>ชื่อผู้ใช้ <input class="user-username" aria-label="ชื่อผู้ใช้ของ ${esc(u.email)}" value="${esc(u.username || "")}" minlength="3" maxlength="32" pattern="[A-Za-z0-9][A-Za-z0-9._-]{1,30}[A-Za-z0-9]" autocapitalize="none" spellcheck="false"></label>
           <label>สิทธิ์ <select class="user-role" aria-label="สิทธิ์ของ ${esc(u.email)}">
@@ -379,8 +479,9 @@
     }).join("");
   }
   async function refreshUsers() {
-    const result = await userAdmin("list");
-    managedUsers = result.users || [];
+    const [result, overview] = await Promise.all([userAdmin("list"), sb.rpc("line_admin_overview")]);
+    const lineById = new Map((overview.data || []).map(row => [row.user_id, row]));
+    managedUsers = (result.users || []).map(user => ({ ...user, ...(lineById.get(user.user_id) || {}) }));
     renderUsers();
   }
   $("manageUsersBtn").onclick = async () => {

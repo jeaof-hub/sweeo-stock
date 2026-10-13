@@ -41,6 +41,8 @@
             <div class="me" id="meEmail"></div>
             <button type="button" id="exportBtn" hidden>ส่งออก Excel</button>
             <button type="button" id="manageUsersBtn" hidden>จัดการผู้ใช้</button>
+            <button type="button" id="lineLinkBtn" hidden>เชื่อมต่อ LINE</button>
+            <button type="button" id="lineSettingsBtn" hidden>ตั้งค่า LINE</button>
             <button type="button" id="auditMenuBtn" hidden>รายการที่ถูกลบ</button>
             <button type="button" id="changesMenuBtn" hidden>บันทึกการเปลี่ยนแปลง</button>
             <button type="button" id="manualMenuBtn">คู่มือการใช้งาน</button>
@@ -65,6 +67,7 @@
 
   <p class="banner" id="banner" hidden></p>
   <p class="banner auth-error" id="authNotice" role="alert" hidden></p>
+  <p class="banner line-quota-banner" id="lineQuotaBanner" role="status" hidden></p>
 
   <section id="viewDashboard" hidden>
     <div class="dashboard-head"><div><h2>ภาพรวม</h2><p id="dashboardPeriod">ข้อมูลล่าสุด</p></div><button class="btn sm" id="dashboardRefresh" type="button">รีเฟรช</button></div>
@@ -209,6 +212,33 @@
   <div class="dlg-foot"><span class="msg" id="upMsg"></span><button class="btn primary" id="upSave" type="submit" form="userPwForm">บันทึกรหัสผ่าน</button></div>
 </div></dialog>
 
+<dialog id="dLine" aria-labelledby="lineTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="lineTitle">เชื่อมต่อ LINE</h2><p>เชื่อมบัญชีพนักงานกับ LINE ส่วนตัวเพื่อรับการแจ้งเตือน</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
+  <div class="dlg-body line-link-body">
+    <div id="lineStatusText" class="line-status-card">กำลังตรวจสอบสถานะ</div>
+    <div id="lineCodePanel" hidden><p class="note">ส่งรหัส 6 หลักนี้ให้บัญชี LINE Official ของ SWEEO ภายในเวลาที่กำหนด</p><div class="line-code" id="lineCode" data-no-translate></div><p class="note" id="lineExpiry"></p></div>
+    <img id="lineQr" class="line-qr" alt="QR Code เพิ่มเพื่อน LINE" hidden>
+    <a class="btn" id="lineAddFriend" href="#" target="_blank" rel="noopener noreferrer" hidden>เพิ่มเพื่อนใน LINE</a>
+    <div class="line-link-actions"><button class="btn primary" id="lineCreateCode" type="button">สร้างรหัสเชื่อมต่อ</button><button class="btn" id="lineUnlink" type="button" hidden>ยกเลิกการเชื่อมต่อ</button></div>
+  </div>
+  <div class="dlg-foot"><span class="msg" id="lineMsg"></span><button class="btn" type="button" data-close>ปิด</button></div>
+</div></dialog>
+
+<dialog id="dLineSettings" aria-labelledby="lineSettingsTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="lineSettingsTitle">ตั้งค่า LINE</h2><p>เฉพาะผู้ก่อตั้งและเจ้าของ</p></div><button class="btn x" type="button" data-close>ปิด</button></div>
+  <div class="dlg-body">
+    <div class="line-usage"><b id="lineUsage">0 / 300 ข้อความ</b><div class="line-usage-track"><i id="lineUsageBar"></i></div></div>
+    <div class="grid">
+      <label class="chk full"><input id="lineNotifyResults" type="checkbox"> แจ้งผลอนุมัติหรือปฏิเสธกลับไปยังผู้ขอ</label>
+      <div class="f"><label for="linePushLimit">เพดาน Push ต่อเดือน</label><input id="linePushLimit" type="number" min="0" max="100000" step="1"></div>
+      <div class="f"><label for="lineAddFriendUrl">ลิงก์เพิ่มเพื่อน LINE</label><input id="lineAddFriendUrl" type="url" placeholder="https://line.me/R/ti/p/..."></div>
+      <div class="f full"><label for="lineQrImageUrl">URL รูป QR Code</label><input id="lineQrImageUrl" type="url" placeholder="https://..."></div>
+    </div>
+    <h3>ผู้รับแจ้งเตือนคำขอใหม่</h3><div id="lineRecipients" class="line-recipients"></div>
+  </div>
+  <div class="dlg-foot"><span class="msg" id="lineSettingsMsg"></span><button class="btn primary" id="lineSettingsSave" type="button">บันทึก</button></div>
+</div></dialog>
+
 <dialog id="dItem" aria-labelledby="iTitle"><div class="dlg">
   <div class="dlg-head"><div><h2 id="iTitle"></h2><p id="iSub"></p></div><button class="btn x" type="button" data-close>ปิด</button></div>
   <div class="dlg-body" id="iBody"></div>
@@ -344,6 +374,6 @@
 <script src="realtime-lifecycle.js?v=1"></script>
 <script src="manual.js?v=1"></script>
 <script src="dispatch-view.js?v=1"></script>
-<script src="app.js?v=delivery-overlay-1"></script>
+<script src="app.js?v=line-l1"></script>
 </body>
 </html>

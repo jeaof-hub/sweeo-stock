@@ -1,8 +1,8 @@
 /* SWEEO offline shell. Production data and authentication requests bypass caches. */
-const CACHE_NAME = "sweeo-shell-v5";
+const CACHE_NAME = "sweeo-shell-v6";
 const LEGACY_PWA_KEY = "./pwa.js";
 const SHELL = [
-  "./", "./index.html", "./style.css?v=delivery-overlay-1", "./theme.js?v=zh-TW-1", "./pwa.js?v=1", "./app.js?v=delivery-overlay-1",
+  "./", "./index.html", "./style.css?v=delivery-overlay-1", "./theme.js?v=zh-TW-1", "./pwa.js?v=1", "./app.js?v=line-l1",
   "./realtime-lifecycle.js?v=1", "./i18n.js?v=realtime-1", "./i18n-zh-TW.js?v=realtime-1",
   "./delivery-note.js?v=table-border-1", "./delivery-pdf.js?v=1", "./scanner.js?v=phase-5-3", "./manual.js?v=1", "./dispatch-view.js?v=1", "./config.js",
   "./site.webmanifest", "./assets/sweeo-logo.png", "./assets/app-icon-192.png",

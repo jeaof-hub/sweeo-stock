@@ -347,6 +347,15 @@ dialog{box-shadow:0 24px 80px rgba(0,0,0,.2)}
 /* Use locally available Traditional Chinese fonts without another download. */
 :root[lang="zh-TW"] body{font-family:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif}
 .lang-switch{max-width:120px;cursor:pointer}
+.line-quota-banner{border-color:#e7a21a;background:#fff6da;color:#6d4900}
+.line-link-body{text-align:center}.line-status-card{padding:16px;border:1px solid var(--line);border-radius:9px;background:var(--bg);margin-bottom:16px}
+.line-code{font:700 clamp(2rem,10vw,3.5rem)/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;color:var(--brand-text);padding:14px}
+.line-qr{display:block;width:min(240px,70vw);height:auto;object-fit:contain;margin:12px auto;border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px}
+.line-link-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+.line-usage{padding:14px;border:1px solid var(--line);border-radius:9px;margin-bottom:18px}.line-usage-track{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:9px}.line-usage-track i{display:block;height:100%;width:0;background:#06c755;transition:width .2s}.line-usage-track i.warning{background:#e7a21a}.line-usage-track i.exceeded{background:#d93025}
+.line-recipients{display:grid;gap:8px}.line-recipient{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:8px}.line-recipient span{flex:1}.line-recipient small{color:var(--muted)}
+.user-line-status{display:block;margin-top:4px;color:var(--muted)}.user-line-status.linked{color:#087d3e}
+.request-card.deep-link-highlight{outline:3px solid var(--brand);outline-offset:2px}
 
 /* In-app delivery-note viewer. The document's own rules are scoped under .sweeo-dn. */
 body.delivery-note-open{overflow:hidden}

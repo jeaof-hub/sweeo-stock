@@ -34,6 +34,22 @@ export async function replyLine(replyToken: string | undefined, accessToken: str
   if (!response.ok) throw new Error(`LINE reply failed (${response.status})`);
 }
 
+export function lineLeavePath(source: { type?: string; groupId?: string; roomId?: string }) {
+  if (source.type === "group" && source.groupId) return `/v2/bot/group/${encodeURIComponent(source.groupId)}/leave`;
+  if (source.type === "room" && source.roomId) return `/v2/bot/room/${encodeURIComponent(source.roomId)}/leave`;
+  return "";
+}
+
+export async function leaveLine(source: { type?: string; groupId?: string; roomId?: string }, accessToken: string) {
+  const path = lineLeavePath(source);
+  if (!path) return;
+  const response = await fetch(`https://api.line.me${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) throw new Error(`LINE leave failed (${response.status})`);
+}
+
 export const textMessage = (text: string) => ({ type: "text", text: text.slice(0, 5000) });
 
 type FlexInput = {

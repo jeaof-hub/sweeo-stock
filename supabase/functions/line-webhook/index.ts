@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { json, replyLine, textMessage, verifyLineSignature } from "../_shared/line.ts";
+import { json, leaveLine, replyLine, textMessage, verifyLineSignature } from "../_shared/line.ts";
 
 const projectUrl = Deno.env.get("SUPABASE_URL");
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -39,7 +39,11 @@ Deno.serve(async request => {
 
     const sourceType = event.source?.type;
     if (sourceType === "group" || sourceType === "room") {
-      await replySafely(event.replyToken, "บอทนี้ใช้ได้เฉพาะแชทส่วนตัว กรุณาเปิดแชท 1:1 กับบัญชีทางการ");
+      if (event.type === "join") {
+        await replySafely(event.replyToken, "บอทนี้ใช้ได้เฉพาะแชทส่วนตัว กรุณาเปิดแชท 1:1 กับบัญชีทางการ");
+        try { await leaveLine(event.source, accessToken!); }
+        catch (error) { console.error("LINE leave failed", error instanceof Error ? error.message : "unknown"); }
+      }
       continue;
     }
     if (sourceType !== "user" || typeof event.source?.userId !== "string") continue;

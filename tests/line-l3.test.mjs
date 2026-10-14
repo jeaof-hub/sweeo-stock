@@ -7,6 +7,8 @@ import { matchLineProducts } from "../supabase/functions/_shared/product-match.t
 const migration = await readFile(new URL("../supabase/27_line_l3_dispatch.sql", import.meta.url), "utf8");
 const timestamped = await readFile(new URL("../supabase/migrations/20261014170000_line_l3_dispatch.sql", import.meta.url), "utf8");
 const webhook = await readFile(new URL("../supabase/functions/line-webhook/index.ts", import.meta.url), "utf8");
+const richMenuMigration = await readFile(new URL("../supabase/28_line_l3_rich_menu.sql", import.meta.url), "utf8");
+const richMenuTimestamped = await readFile(new URL("../supabase/migrations/20261014173000_line_l3_rich_menu.sql", import.meta.url), "utf8");
 
 const products = [
   { id: "elg", code: "1196G30301T", model: "ELG-150-36A", dept: "Project", balance: 20 },
@@ -74,4 +76,14 @@ test("L3 commands and summary controls are available", () => {
 test("L3 sends replies only and never push messages", () => {
   assert.match(webhook, /replyLine/);
   assert.doesNotMatch(webhook, /\/v2\/bot\/message\/(push|broadcast|multicast)/);
+});
+
+test("role-specific rich menus are private and use the correct LINE endpoints", () => {
+  assert.equal(richMenuTimestamped, richMenuMigration);
+  assert.match(richMenuMigration, /grant execute on function public\.line_rich_menu_settings\(\),public\.line_save_rich_menus\(text,text\) to service_role/i);
+  assert.doesNotMatch(richMenuMigration, /grant\s+all/i);
+  assert.match(webhook, /api-data\.line\.me\/v2\/bot\/richmenu/);
+  assert.match(webhook, /\/v2\/bot\/user\/all\/richmenu/);
+  assert.match(webhook, /\["admin", "owner", "founder"\]\.includes\(actor\.role\)/);
+  assert.match(webhook, /text === "ตั้งค่าเมนู"/);
 });

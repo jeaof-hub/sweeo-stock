@@ -25,7 +25,7 @@ async function replySafely(replyToken: string | undefined, messages: unknown | u
 
 async function actorFor(lineUserId: string) {
   const { data: link, error: linkError } = await admin.from("staff_line_links")
-    .select("user_id,active").eq("line_user_id", lineUserId).eq("active", true).maybeSingle();
+    .select("user_id,active,rich_menu_id").eq("line_user_id", lineUserId).eq("active", true).maybeSingle();
   if (linkError || !link) return null;
   const { data: staff, error: staffError } = await admin.from("staff")
     .select("user_id,name,role,is_active").eq("user_id", link.user_id).maybeSingle();
@@ -33,7 +33,58 @@ async function actorFor(lineUserId: string) {
     await admin.from("staff_line_links").update({ active: false }).eq("user_id", link.user_id);
     return null;
   }
-  return staff;
+  return { ...staff, rich_menu_id: link.rich_menu_id || "" };
+}
+
+async function lineApi(path: string, init: RequestInit = {}) {
+  const response = await fetch(`https://api.line.me${path}`, { ...init, headers: { Authorization: `Bearer ${accessToken}`, ...(init.headers || {}) } });
+  if (!response.ok) throw new Error(`LINE API failed (${response.status})`);
+  return response;
+}
+
+async function createRichMenu(name: string, labels: string[]) {
+  const width = 2500, height = 843, cell = width / labels.length;
+  const body = {
+    size: { width, height }, selected: true, name: `SWEEO ${name} L3`, chatBarText: "เมนูสต็อก",
+    areas: labels.map((label, index) => ({
+      bounds: { x: Math.round(index * cell), y: 0, width: Math.round((index + 1) * cell) - Math.round(index * cell), height },
+      action: { type: "message", label, text: label },
+    })),
+  };
+  const response = await lineApi("/v2/bot/richmenu", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return String((await response.json()).richMenuId || "");
+}
+
+async function uploadRichMenuImage(id: string, file: string) {
+  const response = await fetch(`${siteUrl}assets/line/${file}`);
+  if (!response.ok) throw new Error("Rich menu image unavailable");
+  const upload = await fetch(`https://api-data.line.me/v2/bot/richmenu/${id}/content`, {
+    method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" }, body: await response.arrayBuffer(),
+  });
+  if (!upload.ok) throw new Error(`LINE rich menu upload failed (${upload.status})`);
+}
+
+async function setupRichMenus(lineUserId: string) {
+  const member = await createRichMenu("Member", ["ขอเบิกสินค้า", "คำขอของฉัน", "วิธีใช้"]);
+  const approver = await createRichMenu("Approver", ["ขอเบิกสินค้า", "คำขอของฉัน", "รออนุมัติ", "วิธีใช้"]);
+  await Promise.all([
+    uploadRichMenuImage(member, "rich-menu-member.png"),
+    uploadRichMenuImage(approver, "rich-menu-approver.png"),
+  ]);
+  await lineApi(`/v2/bot/user/all/richmenu/${member}`, { method: "POST" });
+  await lineApi(`/v2/bot/user/${encodeURIComponent(lineUserId)}/richmenu/${approver}`, { method: "POST" });
+  const { error } = await admin.rpc("line_save_rich_menus", { p_member: member, p_approver: approver });
+  if (error) throw error;
+  await admin.from("staff_line_links").update({ rich_menu_id: approver }).eq("line_user_id", lineUserId);
+}
+
+async function ensureRichMenu(lineUserId: string, actor: Record<string, any>) {
+  const { data } = await admin.rpc("line_rich_menu_settings");
+  const settings = data?.[0], approver = ["admin", "owner", "founder"].includes(actor.role);
+  const desired = approver ? settings?.approver_rich_menu_id : settings?.member_rich_menu_id;
+  if (!desired || desired === actor.rich_menu_id) return;
+  await lineApi(`/v2/bot/user/${encodeURIComponent(lineUserId)}/richmenu/${desired}`, { method: "POST" });
+  await admin.from("staff_line_links").update({ rich_menu_id: desired }).eq("line_user_id", lineUserId);
 }
 
 const canReview = (actor: Record<string, any>, request: Record<string, any>) =>
@@ -194,6 +245,11 @@ async function handlePostback(event: Record<string, any>, lineUserId: string, ac
 }
 
 async function handleText(event: Record<string, any>, lineUserId: string, actor: Record<string, any>, text: string) {
+  if (text === "ตั้งค่าเมนู") {
+    if (actor.role !== "founder") return replySafely(event.replyToken, textMessage("คำสั่งนี้ใช้ได้เฉพาะผู้ก่อตั้ง"));
+    try { await setupRichMenus(lineUserId); return replySafely(event.replyToken, textMessage("ติดตั้งเมนู LINE สำเร็จแล้ว")); }
+    catch (error) { console.error("rich menu setup failed", error instanceof Error ? error.message : "unknown"); return replySafely(event.replyToken, textMessage("ติดตั้งเมนูไม่สำเร็จ กรุณาลองอีกครั้ง")); }
+  }
   if (text === "ยกเลิก") {
     await Promise.all([
       admin.from("line_action_sessions").delete().eq("line_user_id", lineUserId),
@@ -335,6 +391,7 @@ Deno.serve(async request => {
     }
     const actor = await actorFor(lineUserId);
     if (!actor) { await replySafely(event.replyToken, textMessage("ยังไม่ได้เชื่อมบัญชี กรุณาเข้าสู่เว็บสต็อก เปิดเมนู เชื่อม LINE แล้วส่งรหัส 6 หลักมาที่แชทนี้")); continue; }
+    try { await ensureRichMenu(lineUserId, actor); } catch (error) { console.error("rich menu link failed", error instanceof Error ? error.message : "unknown"); }
     if (event.type === "postback") await handlePostback(event, lineUserId, actor);
     else if (event.type === "message" && event.message?.type === "text") await handleText(event, lineUserId, actor, String(event.message.text || "").trim());
   }

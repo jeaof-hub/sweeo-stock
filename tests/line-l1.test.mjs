@@ -10,6 +10,8 @@ const notify = await readFile(new URL("../supabase/functions/line-notify/index.t
 const app = await readFile(new URL("../app.js", import.meta.url), "utf8");
 const retryMigration = await readFile(new URL("../supabase/24_line_l1_retry_and_cron.sql", import.meta.url), "utf8");
 const retryMigrationTimestamped = await readFile(new URL("../supabase/migrations/20261013130000_line_l1_retry_and_cron.sql", import.meta.url), "utf8");
+const privilegeMigration = await readFile(new URL("../supabase/25_line_service_role_privileges.sql", import.meta.url), "utf8");
+const privilegeMigrationTimestamped = await readFile(new URL("../supabase/migrations/20261014090000_line_service_role_privileges.sql", import.meta.url), "utf8");
 
 test("migration mirror stays identical and private LINE tables use RLS", () => {
   assert.equal(mirror, migration);
@@ -45,6 +47,18 @@ test("retry migration uses claimed_at, fails clearly without pg_cron and schedul
   assert.match(retryMigration, /claimed_at<now\(\)-interval '2 minutes'/i);
   assert.match(retryMigration, /raise exception 'pg_cron is required/i);
   assert.match(retryMigration, /cron\.schedule\('sweeo-line-maintenance','\* \* \* \* \*'/i);
+});
+
+test("LINE Edge Functions receive only their direct table privileges", () => {
+  assert.equal(privilegeMigrationTimestamped, privilegeMigration);
+  assert.match(privilegeMigration, /grant select,insert,delete on table public\.line_processed_events to service_role/i);
+  assert.match(privilegeMigration, /grant select,update on table public\.staff_line_links to service_role/i);
+  for (const table of ["notification_outbox", "dispatch_requests", "dispatch_request_lines", "items"])
+    assert.match(privilegeMigration, new RegExp(`grant select on table public\\.${table} to service_role`, "i"));
+  assert.doesNotMatch(privilegeMigration, /grant\s+all/i);
+  assert.doesNotMatch(privilegeMigration, /\bto\s+(anon|authenticated)\b/i);
+  for (const table of ["line_processed_events", "staff_line_links", "notification_outbox", "dispatch_requests", "dispatch_request_lines", "items"])
+    assert.match(webhook + notify, new RegExp(`\\.from\\(["']${table}["']\\)`));
 });
 
 test("signature verification accepts only the matching HMAC", async () => {

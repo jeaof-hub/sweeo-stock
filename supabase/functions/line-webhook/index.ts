@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { confirmationFlex, json, leaveLine, pendingRequestsFlex, replyLine, textMessage, verifyLineSignature } from "../_shared/line.ts";
+import { confirmationFlex, dispatchSummaryFlex, json, leaveLine, myRequestsFlex, pendingRequestsFlex, postbackData, quickReplyMessage, replyLine, textMessage, verifyLineSignature } from "../_shared/line.ts";
+import { matchLineProducts, type LineProduct } from "../_shared/product-match.ts";
 
 const projectUrl = Deno.env.get("SUPABASE_URL");
 const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -71,11 +72,91 @@ async function startAction(lineUserId: string, actor: Record<string, any>, reque
   return { message: "", request, lines };
 }
 
+const sessionExpiry = () => new Date(Date.now() + 30 * 60_000).toISOString();
+
+async function sessionFor(lineUserId: string) {
+  const { data } = await admin.from("line_sessions").select("*").eq("line_user_id", lineUserId)
+    .gt("expires_at", new Date().toISOString()).maybeSingle();
+  return data;
+}
+
+async function saveSession(lineUserId: string, values: Record<string, unknown>) {
+  return admin.from("line_sessions").update({ ...values, expires_at: sessionExpiry(), updated_at: new Date().toISOString() })
+    .eq("line_user_id", lineUserId);
+}
+
+async function catalog() {
+  const { data, error } = await admin.rpc("line_product_catalog");
+  return { products: (data || []) as LineProduct[], error };
+}
+
+function addSessionLine(lines: Array<Record<string, any>>, product: LineProduct, qty: number, purpose: string) {
+  const next = lines.map(line => ({ ...line }));
+  const existing = next.find(line => line.item_id === product.id);
+  if (existing) existing.qty = Number(existing.qty) + qty;
+  else next.push({ item_id: product.id, code: product.code || "", model: product.model || "", qty, purpose, return_required: false, line_note: "" });
+  return next;
+}
+
+function lineList(session: Record<string, any>) {
+  const lines = Array.isArray(session.lines) ? session.lines : [];
+  if (!lines.length) return "ยังไม่มีสินค้าในคำขอ";
+  return lines.map((line: any, index: number) => `${index + 1}. ${line.model || line.code || line.item_id} × ${line.qty}`).join("\n");
+}
+
+async function handleDispatchPostback(event: Record<string, any>, lineUserId: string, actor: Record<string, any>, action: string, reference: string) {
+  const session = await sessionFor(lineUserId);
+  if (!session || session.actor_user_id !== actor.user_id) return replySafely(event.replyToken, textMessage("รายการหมดอายุแล้ว กรุณาพิมพ์ ขอเบิกสินค้า เพื่อเริ่มใหม่"));
+  if (action === "dispatch_cancel") {
+    await admin.from("line_sessions").delete().eq("line_user_id", lineUserId);
+    return replySafely(event.replyToken, textMessage("ยกเลิกคำขอแล้ว"));
+  }
+  if (action === "dispatch_edit") {
+    await saveSession(lineUserId, { step: "items" });
+    return replySafely(event.replyToken, textMessage(`กลับมาแก้ไขรายการแล้ว\n${lineList(session)}\nพิมพ์สินค้าเพิ่ม, ลบ <ลำดับ> หรือ เสร็จ`));
+  }
+  if (action === "purpose" && ["sale", "gift", "claim", "other"].includes(reference)) {
+    await saveSession(lineUserId, { step: "items", purpose: reference });
+    return replySafely(event.replyToken, textMessage("พิมพ์สินค้าแต่ละบรรทัดเป็น <รหัส/รุ่น/คำค้น> <จำนวน>\nเช่น 5991301242T 3\nเมื่อครบแล้วพิมพ์ เสร็จ"));
+  }
+  if (action === "pick") {
+    const pending = session.pending_match || {};
+    if (session.step !== "items" || !Array.isArray(pending.candidate_ids) || !pending.candidate_ids.includes(reference))
+      return replySafely(event.replyToken, textMessage("ตัวเลือกนี้หมดอายุแล้ว กรุณาพิมพ์สินค้าอีกครั้ง"));
+    const { products, error } = await catalog();
+    const product = products.find(item => item.id === reference), qty = Number(pending.qty || 0);
+    if (error || !product || !Number.isInteger(qty) || qty <= 0) return replySafely(event.replyToken, textMessage("เลือกสินค้าไม่สำเร็จ กรุณาลองใหม่"));
+    const currentLines = Array.isArray(session.lines) ? session.lines : [];
+    const existingQty = Number(currentLines.find((line: any) => line.item_id === product.id)?.qty || 0);
+    if (existingQty + qty > Number(product.balance || 0)) return replySafely(event.replyToken, textMessage(`ยอดคงเหลือไม่พอ คงเหลือ ${Number(product.balance || 0).toLocaleString("th-TH")} ชิ้น`));
+    const lines = addSessionLine(currentLines, product, qty, session.purpose);
+    await saveSession(lineUserId, { lines, pending_match: null });
+    return replySafely(event.replyToken, textMessage(`เพิ่ม ${product.model || product.code} × ${qty} แล้ว`));
+  }
+  if (action === "dispatch_confirm") {
+    if (session.step !== "confirm" || !Array.isArray(session.lines) || !session.lines.length)
+      return replySafely(event.replyToken, textMessage("รายการยังไม่พร้อมส่ง กรุณาตรวจสอบอีกครั้ง"));
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const { data: requestId, error } = await admin.rpc("create_dispatch_request_as", {
+      p_actor: actor.user_id, p_document_date: today, p_delivery_date: today, p_customer: session.customer,
+      p_doc_no: "", p_dept: "LINE", p_sale: "", p_note: "สร้างผ่าน LINE Bot", p_lines: session.lines,
+    });
+    if (error) return replySafely(event.replyToken, textMessage("ส่งคำขอไม่สำเร็จ กรุณาตรวจยอดคงเหลือหรือลองในเว็บ"));
+    await admin.from("line_sessions").delete().eq("line_user_id", lineUserId);
+    const { data: request } = await admin.from("dispatch_requests").select("delivery_note_no,status").eq("id", requestId).single();
+    const state = request?.status === "approved" ? "อนุมัติและตัดยอดแล้ว" : "รออนุมัติ";
+    return replySafely(event.replyToken, textMessage(`ส่งคำขอสำเร็จ ${request?.delivery_note_no || ""}\nสถานะ: ${state}`));
+  }
+  return replySafely(event.replyToken, textMessage("ปุ่มนี้ใช้ไม่ได้ในขั้นตอนปัจจุบัน"));
+}
+
 async function handlePostback(event: Record<string, any>, lineUserId: string, actor: Record<string, any>) {
   let payload: Record<string, unknown> = {};
   try { payload = JSON.parse(String(event.postback?.data || "")); } catch { /* invalid button */ }
   const action = typeof payload.a === "string" ? payload.a : "";
   const requestId = typeof payload.r === "string" ? payload.r : "";
+  if (["dispatch_cancel", "dispatch_edit", "dispatch_confirm", "purpose", "pick"].includes(action))
+    return handleDispatchPostback(event, lineUserId, actor, action, requestId);
   if (Object.keys(payload).some(key => key !== "a" && key !== "r") || !/^[0-9a-f-]{36}$/i.test(requestId))
     return replySafely(event.replyToken, textMessage("ปุ่มนี้ไม่ถูกต้อง กรุณาเปิดรายการใหม่"));
   if (action === "cancel") {
@@ -113,6 +194,13 @@ async function handlePostback(event: Record<string, any>, lineUserId: string, ac
 }
 
 async function handleText(event: Record<string, any>, lineUserId: string, actor: Record<string, any>, text: string) {
+  if (text === "ยกเลิก") {
+    await Promise.all([
+      admin.from("line_action_sessions").delete().eq("line_user_id", lineUserId),
+      admin.from("line_sessions").delete().eq("line_user_id", lineUserId),
+    ]);
+    return replySafely(event.replyToken, textMessage("ยกเลิกรายการแล้ว"));
+  }
   const { data: rejection } = await admin.from("line_action_sessions").select("actor_user_id,request_id,expires_at")
     .eq("line_user_id", lineUserId).eq("action", "reject").eq("state", "awaiting_reason")
     .gt("expires_at", new Date().toISOString()).maybeSingle();
@@ -134,7 +222,87 @@ async function handleText(event: Record<string, any>, lineUserId: string, actor:
     if (!data?.length) return replySafely(event.replyToken, textMessage("ไม่มีคำขอที่คุณอนุมัติได้ในขณะนี้"));
     return replySafely(event.replyToken, pendingRequestsFlex(data, siteUrl));
   }
-  return replySafely(event.replyToken, textMessage("คำสั่งที่ใช้ได้: รออนุมัติ"));
+  if (text === "คำขอของฉัน") {
+    const { data, error } = await admin.rpc("line_my_dispatch_requests", { p_actor: actor.user_id });
+    if (error) return replySafely(event.replyToken, textMessage("โหลดรายการไม่สำเร็จ กรุณาลองใหม่"));
+    if (!data?.length) return replySafely(event.replyToken, textMessage("ยังไม่มีคำขอเบิกสินค้า"));
+    return replySafely(event.replyToken, myRequestsFlex(data));
+  }
+  if (text === "วิธีใช้") return replySafely(event.replyToken, textMessage(
+    "คำสั่ง LINE Bot\n• ขอเบิกสินค้า — เริ่มสร้างคำขอ\n• คำขอของฉัน — ดู 10 รายการล่าสุด\n• รออนุมัติ — สำหรับผู้มีสิทธิ์อนุมัติ\n• ยกเลิก — ยกเลิกรายการที่กำลังทำ",
+  ));
+  if (text === "ขอเบิกสินค้า") {
+    const { error } = await admin.from("line_sessions").upsert({
+      line_user_id: lineUserId, actor_user_id: actor.user_id, step: "customer", customer: "",
+      purpose: null, lines: [], pending_match: null, expires_at: sessionExpiry(), updated_at: new Date().toISOString(),
+    }, { onConflict: "line_user_id" });
+    return replySafely(event.replyToken, textMessage(error ? "เริ่มคำขอไม่สำเร็จ กรุณาลองใหม่" : "กรุณาพิมพ์ชื่อลูกค้าหรือสถานที่ปลายทาง"));
+  }
+
+  const session = await sessionFor(lineUserId);
+  if (session?.actor_user_id === actor.user_id) {
+    if (session.step === "customer") {
+      if (text.length < 2 || text.length > 300) return replySafely(event.replyToken, textMessage("กรุณาระบุชื่อลูกค้าหรือปลายทาง 2–300 ตัวอักษร"));
+      await saveSession(lineUserId, { customer: text, step: "purpose" });
+      return replySafely(event.replyToken, quickReplyMessage("เลือกวัตถุประสงค์", [
+        { label: "ขาย", data: postbackData("purpose", "sale") },
+        { label: "แถม", data: postbackData("purpose", "gift") },
+        { label: "เคลม", data: postbackData("purpose", "claim") },
+        { label: "อื่นๆ", data: postbackData("purpose", "other") },
+      ]));
+    }
+    if (session.step === "purpose") {
+      const purposes: Record<string, string> = { "ขาย": "sale", "แถม": "gift", "เคลม": "claim", "อื่นๆ": "other", sale: "sale", gift: "gift", claim: "claim", other: "other" };
+      if (!purposes[text.toLowerCase()]) return replySafely(event.replyToken, textMessage("กรุณาเลือกวัตถุประสงค์จากปุ่ม: ขาย / แถม / เคลม / อื่นๆ"));
+      await saveSession(lineUserId, { purpose: purposes[text.toLowerCase()], step: "items" });
+      return replySafely(event.replyToken, textMessage("พิมพ์สินค้าเป็น <รหัส/รุ่น/คำค้น> <จำนวน> บรรทัดละหนึ่งรายการ\nเช่น 5991301242T 3\nเมื่อครบแล้วพิมพ์ เสร็จ"));
+    }
+    if (session.step === "confirm") return replySafely(event.replyToken, dispatchSummaryFlex(session));
+    if (session.step === "items") {
+      if (text === "ดูรายการ") return replySafely(event.replyToken, textMessage(lineList(session)));
+      if (text === "เสร็จ") {
+        if (!Array.isArray(session.lines) || !session.lines.length) return replySafely(event.replyToken, textMessage("กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการ"));
+        await saveSession(lineUserId, { step: "confirm", pending_match: null });
+        return replySafely(event.replyToken, dispatchSummaryFlex(session));
+      }
+      const remove = text.match(/^ลบ\s+(\d+)$/);
+      if (remove) {
+        const lines = Array.isArray(session.lines) ? [...session.lines] : [], index = Number(remove[1]) - 1;
+        if (index < 0 || index >= lines.length) return replySafely(event.replyToken, textMessage("ไม่พบลำดับที่ต้องการลบ พิมพ์ ดูรายการ เพื่อตรวจสอบ"));
+        const [deleted] = lines.splice(index, 1);
+        await saveSession(lineUserId, { lines, pending_match: null });
+        return replySafely(event.replyToken, textMessage(`ลบ ${deleted.model || deleted.code || "สินค้า"} แล้ว\n${lineList({ lines })}`));
+      }
+      const entries = text.split(/[\r\n]+/).map(value => value.trim()).filter(Boolean);
+      const parsed = entries.map(value => value.match(/^(.+?)\s+([+-]?\d+(?:\.\d+)?)$/));
+      if (!parsed.length || parsed.some(value => !value || !Number.isInteger(Number(value[2])) || Number(value[2]) <= 0))
+        return replySafely(event.replyToken, textMessage("รูปแบบไม่ถูกต้อง กรุณาพิมพ์ <รหัส/รุ่น/คำค้น> <จำนวนเต็มบวก> บรรทัดละหนึ่งรายการ"));
+      const { products, error } = await catalog();
+      if (error) return replySafely(event.replyToken, textMessage("โหลดรายการสินค้าไม่สำเร็จ กรุณาลองใหม่"));
+      let lines = Array.isArray(session.lines) ? session.lines : [];
+      const added: string[] = [];
+      for (const match of parsed) {
+        const query = match![1].trim(), qty = Number(match![2]);
+        const result = matchLineProducts(query, products);
+        if (!result.match) {
+          if (!result.candidates.length) return replySafely(event.replyToken, textMessage(`ไม่พบสินค้า “${query}” กรุณาตรวจรหัสหรือชื่อรุ่น`));
+          await saveSession(lineUserId, { lines, pending_match: { qty, candidate_ids: result.candidates.map(row => row.product.id) } });
+          return replySafely(event.replyToken, quickReplyMessage(`พบหลายรายการสำหรับ “${query}” กรุณาเลือก`, result.candidates.map(row => ({
+            label: row.product.model || row.product.code || row.product.id,
+            data: postbackData("pick", row.product.id),
+          }))));
+        }
+        const product = result.match, existingQty = Number(lines.find((line: any) => line.item_id === product.id)?.qty || 0);
+        if (existingQty + qty > Number(product.balance || 0))
+          return replySafely(event.replyToken, textMessage(`${product.model || product.code}: ยอดคงเหลือไม่พอ คงเหลือ ${Number(product.balance || 0).toLocaleString("th-TH")} ชิ้น`));
+        lines = addSessionLine(lines, product, qty, session.purpose);
+        added.push(`${product.model || product.code} × ${qty}`);
+      }
+      await saveSession(lineUserId, { lines, pending_match: null });
+      return replySafely(event.replyToken, textMessage(`เพิ่มแล้ว\n${added.join("\n")}\n\nพิมพ์สินค้าเพิ่ม, ดูรายการ, ลบ <ลำดับ> หรือ เสร็จ`));
+    }
+  }
+  return replySafely(event.replyToken, textMessage("คำสั่งที่ใช้ได้: ขอเบิกสินค้า, คำขอของฉัน, รออนุมัติ, วิธีใช้"));
 }
 
 Deno.serve(async request => {

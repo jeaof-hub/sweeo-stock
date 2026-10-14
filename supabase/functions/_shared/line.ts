@@ -52,6 +52,12 @@ export async function leaveLine(source: { type?: string; groupId?: string; roomI
 
 export const textMessage = (text: string) => ({ type: "text", text: text.slice(0, 5000) });
 
+export const quickReplyMessage = (text: string, items: Array<{ label: string; data: string }>) => ({
+  type: "text", text: text.slice(0, 5000), quickReply: { items: items.slice(0, 13).map(item => ({
+    type: "action", action: { type: "postback", label: item.label.slice(0, 20), data: item.data, displayText: item.label.slice(0, 20) },
+  })) },
+});
+
 export const postbackData = (action: string, requestId: string) =>
   JSON.stringify({ a: action, r: requestId });
 
@@ -94,6 +100,39 @@ export function pendingRequestsFlex(rows: Array<Record<string, unknown>>, siteUr
       footer: { type: "box", layout: "vertical", spacing: "sm", contents: approvalButtons(String(row.id), siteUrl) },
     })) },
   };
+}
+
+export function dispatchSummaryFlex(session: Record<string, any>) {
+  const lines = Array.isArray(session.lines) ? session.lines : [];
+  const total = lines.reduce((sum: number, line: any) => sum + Number(line.qty || 0), 0);
+  return {
+    type: "flex", altText: `ยืนยันคำขอเบิก ${lines.length} รายการ`, contents: { type: "bubble",
+      header: { type: "box", layout: "vertical", backgroundColor: "#F78325", contents: [{ type: "text", text: "สรุปคำขอเบิกสินค้า", color: "#FFFFFF", weight: "bold" }] },
+      body: { type: "box", layout: "vertical", spacing: "sm", contents: [
+        { type: "text", text: `ลูกค้า/ปลายทาง: ${String(session.customer || "–")}`, wrap: true },
+        ...lines.slice(0, 10).map((line: any, index: number) => ({ type: "text", text: `${index + 1}. ${line.model || line.code || line.item_id} × ${line.qty}`, size: "sm", wrap: true })),
+        ...(lines.length > 10 ? [{ type: "text", text: `อีก ${lines.length - 10} รายการ`, size: "xs", color: "#777777" }] : []),
+        { type: "text", text: `รวม ${total.toLocaleString("th-TH")} ชิ้น`, weight: "bold", align: "end" },
+      ] }, footer: { type: "box", layout: "vertical", spacing: "sm", contents: [
+        { type: "button", style: "primary", color: "#258A48", action: { type: "postback", label: "ยืนยันส่งคำขอ", data: postbackData("dispatch_confirm", "session"), displayText: "ยืนยันส่งคำขอ" } },
+        { type: "button", action: { type: "postback", label: "แก้ไข", data: postbackData("dispatch_edit", "session"), displayText: "แก้ไขรายการ" } },
+        { type: "button", action: { type: "postback", label: "ยกเลิก", data: postbackData("dispatch_cancel", "session"), displayText: "ยกเลิกคำขอ" } },
+      ] },
+    },
+  };
+}
+
+export function myRequestsFlex(rows: Array<Record<string, any>>) {
+  const labels: Record<string, string> = { pending: "รออนุมัติ", approved: "อนุมัติแล้ว", rejected: "ปฏิเสธ", cancelled: "ยกเลิก" };
+  return { type: "flex", altText: `คำขอของฉัน ${rows.length} ใบ`, contents: { type: "bubble", body: {
+    type: "box", layout: "vertical", spacing: "md", contents: [
+      { type: "text", text: "คำขอของฉัน", weight: "bold", size: "lg" },
+      ...rows.map(row => ({ type: "box", layout: "vertical", contents: [
+        { type: "text", text: `${row.delivery_note_no || "–"} · ${labels[row.status] || row.status}`, weight: "bold", size: "sm" },
+        { type: "text", text: String(row.customer || "–"), size: "xs", color: "#666666", wrap: true },
+      ] })),
+    ],
+  } } };
 }
 
 type FlexInput = {

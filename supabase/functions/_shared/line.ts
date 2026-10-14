@@ -52,6 +52,50 @@ export async function leaveLine(source: { type?: string; groupId?: string; roomI
 
 export const textMessage = (text: string) => ({ type: "text", text: text.slice(0, 5000) });
 
+export const postbackData = (action: string, requestId: string) =>
+  JSON.stringify({ a: action, r: requestId });
+
+export function approvalButtons(requestId: string, siteUrl: string, lang = "th") {
+  const zh = lang === "zh-TW";
+  return [
+    { type: "button", style: "primary", color: "#258A48", action: { type: "postback", label: zh ? "核准全部" : "อนุมัติเต็มจำนวน", data: postbackData("approve", requestId), displayText: zh ? "核准全部" : "อนุมัติเต็มจำนวน" } },
+    { type: "button", style: "secondary", action: { type: "postback", label: zh ? "拒絕" : "ปฏิเสธ", data: postbackData("reject", requestId), displayText: zh ? "拒絕" : "ปฏิเสธ" } },
+    { type: "button", action: { type: "uri", label: zh ? "部分核准" : "อนุมัติบางส่วน", uri: `${siteUrl}?tab=pending&request=${encodeURIComponent(requestId)}` } },
+  ];
+}
+
+export function confirmationFlex(request: Record<string, unknown>, lineCount: number, total: number) {
+  const id = String(request.id || "");
+  const note = String(request.delivery_note_no || "–");
+  return {
+    type: "flex", altText: `ยืนยันอนุมัติ ${note}`,
+    contents: { type: "bubble", body: { type: "box", layout: "vertical", spacing: "md", contents: [
+      { type: "text", text: `ยืนยันอนุมัติ ${note}?`, weight: "bold", size: "lg", wrap: true },
+      { type: "text", text: `${lineCount} รายการ รวม ${total.toLocaleString("th-TH")} ชิ้น`, wrap: true },
+      { type: "text", text: "ปุ่มยืนยันมีอายุ 5 นาที", size: "xs", color: "#777777" },
+    ] }, footer: { type: "box", layout: "horizontal", spacing: "sm", contents: [
+      { type: "button", style: "primary", color: "#258A48", action: { type: "postback", label: "ยืนยัน", data: postbackData("confirm", id), displayText: "ยืนยันอนุมัติ" } },
+      { type: "button", action: { type: "postback", label: "ยกเลิก", data: postbackData("cancel", id), displayText: "ยกเลิก" } },
+    ] } },
+  };
+}
+
+export function pendingRequestsFlex(rows: Array<Record<string, unknown>>, siteUrl: string) {
+  return {
+    type: "flex", altText: `คำขอรออนุมัติ ${rows.length} ใบ`,
+    contents: { type: "carousel", contents: rows.map(row => ({
+      type: "bubble", size: "kilo",
+      body: { type: "box", layout: "vertical", spacing: "sm", contents: [
+        { type: "text", text: String(row.delivery_note_no || "–"), weight: "bold", size: "lg" },
+        { type: "text", text: `ผู้ขอ: ${String(row.requester_name || "–")}`, size: "sm", wrap: true },
+        { type: "text", text: `ลูกค้า/ปลายทาง: ${String(row.customer || "–")}`, size: "sm", wrap: true },
+        { type: "text", text: `${String(row.line_count || 0)} รายการ รวม ${Number(row.total_qty || 0).toLocaleString("th-TH")} ชิ้น`, size: "sm" },
+      ] },
+      footer: { type: "box", layout: "vertical", spacing: "sm", contents: approvalButtons(String(row.id), siteUrl) },
+    })) },
+  };
+}
+
 type FlexInput = {
   kind: "pending" | "result";
   lang: string;
@@ -116,9 +160,9 @@ export function buildNotificationFlex(input: FlexInput) {
         { type: "separator" },
         { type: "text", text: `${labels.total}: ${total.toLocaleString(zh ? "zh-TW" : "th-TH")} ${zh ? "件" : "ชิ้น"}`, weight: "bold", align: "end" },
       ] },
-      footer: { type: "box", layout: "vertical", contents: [
-        { type: "button", style: "primary", color: "#F78325", action: { type: "uri", label: labels.open, uri: url } },
-      ] },
+      footer: { type: "box", layout: "vertical", spacing: "sm", contents: input.kind === "pending"
+        ? approvalButtons(String(request.id || ""), input.siteUrl, input.lang)
+        : [{ type: "button", style: "primary", color: "#F78325", action: { type: "uri", label: labels.open, uri: url } }] },
     },
   };
 }

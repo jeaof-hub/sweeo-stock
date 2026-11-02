@@ -44,6 +44,6 @@ test("UI exposes edit, review, pending state and blocks printing and invoicing",
   assert.match(app,/request_dispatch_line_qty_change/);
   assert.match(app,/approve_dispatch_line_qty_change/);
   assert.match(app,/reject_dispatch_line_qty_change/);
-  assert.match(app,/มีรายการแก้จำนวนรออนุมัติ จึงยังพิมพ์ไม่ได้/);
+  assert.match(app,/มีรายการแก้ไขรออนุมัติ จึงยังพิมพ์ไม่ได้/);
   assert.match(app,/qty_change_status !== "pending"/);
 });

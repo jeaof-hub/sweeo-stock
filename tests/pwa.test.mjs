@@ -59,8 +59,8 @@ test("service worker keeps the offline shell without relying on cache version ch
   assert.match(pwa, /updatefound/);
   assert.match(pwa, /controllerchange/);
   assert.match(pwa, /SKIP_WAITING/);
-  for (const required of ["./index.html", "./style.css?v=qty-reapproval-1", "./app.js?v=qty-reapproval-1", "./delivery-note.js?v=void-line-1", "./pwa.js?v=1", "./site.webmanifest"]) assert.ok(source.includes(`"${required}"`), `${required} missing from shell`);
-  assert.match(source, /const CACHE_NAME = "sweeo-shell-v8"/);
+  for (const required of ["./index.html", "./style.css?v=add-line-1", "./app.js?v=add-line-1", "./delivery-note.js?v=void-line-1", "./pwa.js?v=1", "./site.webmanifest"]) assert.ok(source.includes(`"${required}"`), `${required} missing from shell`);
+  assert.match(source, /const CACHE_NAME = "sweeo-shell-v9"/);
   assert.ok(source.includes('"./delivery-pdf.js?v=1"'));
 });
 

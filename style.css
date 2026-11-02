@@ -377,3 +377,6 @@ body.delivery-note-open{overflow:hidden}
   #deliveryNoteOverlay .sweeo-dn{background:#fff!important;padding:0!important;min-width:0!important}
   #deliveryNoteOverlay .sweeo-dn .delivery-page{width:auto!important;margin:0!important;box-shadow:none!important}
 }
+.line.add-line-form{grid-template-columns:1fr 110px}.request-lines label.add-line-pending{border-color:#d99a00;background:#fff8e6}.request-lines label.add-line-closed{opacity:.72}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .request-lines label.add-line-pending{background:rgba(217,154,0,.12)}}
+:root[data-theme="dark"] .request-lines label.add-line-pending{background:rgba(217,154,0,.12)}

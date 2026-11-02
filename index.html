@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=qty-reapproval-1">
+<link rel="stylesheet" href="style.css?v=add-line-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -345,6 +345,12 @@
   <div class="dlg-foot"><span class="msg" id="voidLineMsg"></span><button class="btn" type="button" data-close>ไม่ลบ</button><button class="btn danger" type="button" id="voidLineSave">ลบรายการนี้</button></div>
 </div></dialog>
 
+<dialog id="dAddLine" aria-labelledby="addLineTitle"><div class="dlg">
+  <div class="dlg-head"><div><h2 id="addLineTitle">เพิ่มสินค้าในใบที่อนุมัติแล้ว</h2><p id="addLineSub"></p></div><button class="btn x" type="button" data-close>ปิด</button></div>
+  <div class="dlg-body"><p class="note">รายการใหม่จะรออนุมัติจากผู้มีสิทธิ์อีกบัญชี และยังไม่ตัดสต็อกจนกว่าจะอนุมัติ</p><div id="addLineBox"></div></div>
+  <div class="dlg-foot"><span class="msg" id="addLineMsg"></span><button class="btn" type="button" data-close>ยกเลิก</button><button class="btn primary" type="button" id="addLineSave">ส่งรออนุมัติ</button></div>
+</div></dialog>
+
 <dialog id="dDispatchSuccess" aria-labelledby="dispatchSuccessTitle"><div class="dlg">
   <div class="dlg-head"><div><h2 id="dispatchSuccessTitle">บันทึกสำเร็จ</h2><p id="dispatchSuccessMessage"></p></div><button class="btn x" type="button" data-close>ปิด</button></div>
   <div class="dlg-foot"><button class="btn" type="button" data-close>ปิด</button><button class="btn primary" type="button" id="dispatchSuccessPrint">พิมพ์ใบส่งของ</button></div>
@@ -371,8 +377,8 @@
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 <datalist id="invoiceCustomerList"></datalist>
 
-<script src="i18n-zh-TW.js?v=realtime-1"></script>
-<script src="i18n.js?v=realtime-1"></script>
+<script src="i18n-zh-TW.js?v=add-line-1"></script>
+<script src="i18n.js?v=add-line-1"></script>
 <script src="pwa.js?v=1"></script>
 <script src="delivery-note.js?v=void-line-1"></script>
 <script src="delivery-pdf.js?v=1"></script>
@@ -380,6 +386,6 @@
 <script src="realtime-lifecycle.js?v=1"></script>
 <script src="manual.js?v=1"></script>
 <script src="dispatch-view.js?v=void-line-1"></script>
-<script src="app.js?v=qty-reapproval-1"></script>
+<script src="app.js?v=add-line-1"></script>
 </body>
 </html>

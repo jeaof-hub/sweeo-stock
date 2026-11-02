@@ -1,7 +1,52 @@
 -- Add a product to an approved dispatch request through a second approval.
 -- The proposal never touches stock; approval creates the line and its movement atomically.
 -- Safe to run repeatedly. Requires 29_void_dispatch_lines.sql and 30_dispatch_line_quantity_reapproval.sql.
+-- Supersedes the unfinished addition_* columns/functions found on production on 2026-11-02 (never used, no data).
 begin;
+
+-- 0. Remove an unfinished, unused alternative implementation that was partially installed
+-- directly on production (addition_* columns inside dispatch_request_lines). It never held data;
+-- abort instead of dropping anything if it ever did.
+do $$
+declare used integer := 0;
+begin
+  if exists(select 1 from information_schema.columns where table_schema='public' and table_name='dispatch_request_lines' and column_name='addition_status') then
+    execute 'select count(*) from public.dispatch_request_lines where addition_status is not null or addition_requested_by is not null' into used;
+    if used>0 then raise exception 'dispatch_request_lines.addition_* holds % rows; refusing to remove it',used; end if;
+  end if;
+end $$;
+drop function if exists public.request_dispatch_line_addition(uuid,text,numeric,text,boolean,text,text);
+drop function if exists public.approve_dispatch_line_addition(uuid);
+drop function if exists public.reject_dispatch_line_addition(uuid,text);
+create or replace function public.prevent_voided_dispatch_line_invoice()
+returns trigger language plpgsql set search_path=public as $$
+begin
+  if new.voided_at is not null and (new.invoice_id is not null or nullif(trim(new.no_invoice_reason),'') is not null) then
+    raise exception 'รายการนี้ถูกลบจากคำขอเบิกแล้ว';
+  end if;
+  if new.qty_change_status='pending' and new.invoice_id is not null then
+    raise exception 'รายการนี้กำลังรออนุมัติการแก้จำนวน';
+  end if;
+  return new;
+end $$;
+create or replace function public.prevent_pending_qty_change_void()
+returns trigger language plpgsql set search_path=public as $$
+begin
+  if old.qty_change_status='pending' and new.voided_at is not null then
+    raise exception 'กรุณาอนุมัติหรือปฏิเสธการแก้จำนวนก่อนลบรายการ';
+  end if;
+  return new;
+end $$;
+drop index if exists public.dispatch_line_addition_pending_idx;
+alter table public.dispatch_request_lines drop constraint if exists dispatch_line_addition_status_check;
+alter table public.dispatch_request_lines
+  drop column if exists addition_status,
+  drop column if exists addition_reason,
+  drop column if exists addition_requested_by,
+  drop column if exists addition_requested_at,
+  drop column if exists addition_reviewed_by,
+  drop column if exists addition_reviewed_at,
+  drop column if exists addition_rejection_reason;
 
 -- 1. A voided line keeps its row for audit, so uniqueness applies to active lines only.
 do $$

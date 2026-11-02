@@ -674,7 +674,7 @@
     const cards = [
       { icon: "!", label: "สินค้าที่ควรสั่งผลิต", value: reorder.length, tone: reorder.some(x => x.severity === "red") ? "danger" : "warning", action: "reorder" },
       { icon: "✓", label: "คำขอรออนุมัติ", value: (Number(dashboard.pending_approval_count) || 0)+dispatchRequests.filter(r=>r.status==="approved"&&needsRevisionReview(r.id)).length, tone: "brand", action: "pending", hidden: !["admin","owner","founder"].includes(currentRole) },
-      { icon: "INV", label: "รายการรอเปิด INV", value: dashboard.invoice_waiting_count == null ? null : Number(dashboard.invoice_waiting_count) || 0, tone: "neutral", action: "invoices", hidden: dashboard.invoice_waiting_count == null },
+      { icon: "INV", label: "รายการรอเปิด INV", value: dashboard.invoice_waiting_count == null ? null : unresolvedInvoiceLines().length, tone: "neutral", action: "invoices", hidden: dashboard.invoice_waiting_count == null },
       { icon: "↗", label: "ส่งออกสัปดาห์นี้", value: fmt(Number(dashboard.weekly_out_qty) || 0), suffix: "ชิ้น", tone: "success" }
     ].filter(x => !x.hidden);
     $("dashboardCards").innerHTML = cards.map(c => `<button class="dashboard-card ${c.tone}" type="button"${c.action ? ` data-dashboard-action="${c.action}"` : ""}><span class="dashboard-icon">${esc(c.icon)}</span><span><small>${esc(c.label)}</small><b>${esc(c.value)}${c.suffix ? ` <em>${esc(c.suffix)}</em>` : ""}</b></span></button>`).join("");
@@ -990,7 +990,7 @@
     if (!$("viewDashboard").hidden) renderDashboard();
     const pendingCount = dispatchRequests.filter(r => (r.status === "pending" && canReviewDispatch(r)) || needsRevisionReview(r.id)).length;
     $("pendingBadge").textContent = pendingCount ? `(${pendingCount})` : "";
-    const invoiceWaitingCount = dispatchLines.filter(l => !l.voided_at && !l.invoice_id && !l.no_invoice_reason && dispatchRequests.some(r => r.id === l.request_id && r.status === "approved")).length;
+    const invoiceWaitingCount = unresolvedInvoiceLines().length;
     $("invoiceBadge").textContent = invoiceWaitingCount ? `(${invoiceWaitingCount})` : "";
     if (!$("viewLog").hidden) renderLog();
     if (!$("viewAudit").hidden) renderAudit();

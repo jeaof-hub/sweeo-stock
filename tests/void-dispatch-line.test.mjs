@@ -43,7 +43,7 @@ test("all totals and external representations exclude voided lines",()=>{
   assert.match(view,/&& !line\.voided_at/);
   assert.match(app,/activeRequestLines/);
   assert.match(app,/allLines\.filter\(line=>!line\.voided_at\)/);
-  assert.match(app,/!l\.voided_at && !l\.invoice_id/);
+  assert.match(app,/!l\.voided_at && l\.qty_change_status !== "pending"/);
   assert.match(notify,/\.is\("voided_at", null\)/);
   assert.match(webhook,/\.is\("voided_at", null\)/);
 });

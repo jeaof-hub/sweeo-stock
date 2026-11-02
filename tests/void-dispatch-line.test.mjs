@@ -49,7 +49,7 @@ test("all totals and external representations exclude voided lines",()=>{
 });
 
 test("only stock managers see the void control and the UI records a reason",()=>{
-  assert.match(app,/canManageStock\(\) && request\.status === "approved" && !line\.voided_at/);
+  assert.match(app,/canManageStock\(\)&&request\.status==="approved"&&!pending/);
   assert.match(app,/sb\.rpc\("void_dispatch_line",\{p_line_id:lineId,p_reason:reason\}\)/);
   assert.match(app,/reason\.length<2/);
   assert.match(app,/class="void-detail"/);

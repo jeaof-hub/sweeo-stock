@@ -5,7 +5,7 @@
   function canSeeDeliveryNotes(role) { return allowedRoles.has(role); }
   function invoiceState(request, lines) {
     if (request?.status !== "approved") return "";
-    const own = lines.filter(line => line.request_id === request.id);
+    const own = lines.filter(line => line.request_id === request.id && !line.voided_at);
     const done = own.filter(line => line.invoice_id || line.no_invoice_reason).length;
     return !done ? "รอ INV" : done < own.length ? "INV บางส่วน" : "ครบ";
   }

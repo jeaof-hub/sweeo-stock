@@ -76,3 +76,10 @@ test("Taiwan delivery notes localize headings and signatures while preserving so
   assert.match(html,/>40<\/td>/);
   assert.equal((html.match(/class="item-row(?: blank-row)?"/g)||[]).length,20);
 });
+
+test("a corrected approved note keeps its number and shows the revision date",()=>{
+  const html=buildDocument({...base,request:{...base.request,revision_date:"2026-11-02T03:00:00Z"},lang:"th"});
+  assert.match(html,/TD-20260925-00001/);
+  assert.match(html,/ฉบับแก้ไข 2026-11-02T03:00:00Z/);
+  assert.equal((html.match(/class="item-row(?: blank-row)?"/g)||[]).length,20);
+});

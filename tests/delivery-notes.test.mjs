@@ -31,6 +31,7 @@ test('invoice state is correct at delivery-note level', () => {
   assert.equal(view.invoiceState(request, base), 'รอ INV');
   assert.equal(view.invoiceState(request, [{ ...base[0], invoice_id: 'inv' }, base[1]]), 'INV บางส่วน');
   assert.equal(view.invoiceState(request, [{ ...base[0], invoice_id: 'inv' }, { ...base[1], no_invoice_reason: 'free sample' }]), 'ครบ');
+  assert.equal(view.invoiceState(request, [{ ...base[0], voided_at: '2026-11-02T00:00:00Z' }, { ...base[1], invoice_id: 'inv' }]), 'ครบ');
   assert.equal(view.invoiceState({ ...request, status: 'pending' }, base), '');
 });
 

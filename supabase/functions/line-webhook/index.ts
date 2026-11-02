@@ -95,7 +95,7 @@ const canReview = (actor: Record<string, any>, request: Record<string, any>) =>
 async function requestInfo(requestId: string) {
   const [{ data: request }, { data: lines }] = await Promise.all([
     admin.from("dispatch_requests").select("id,delivery_note_no,status,requester_id,requester_role,decided_by,decided_at").eq("id", requestId).maybeSingle(),
-    admin.from("dispatch_request_lines").select("id,requested_qty").eq("request_id", requestId).order("id"),
+    admin.from("dispatch_request_lines").select("id,requested_qty").eq("request_id", requestId).is("voided_at", null).order("id"),
   ]);
   return { request, lines: lines || [] };
 }

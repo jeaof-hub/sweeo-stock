@@ -220,6 +220,7 @@ body.scanner-open{overflow:hidden}
 .request-head b,.request-head small{display:block}.request-head small{color:var(--muted);margin-top:3px}
 .request-lines{display:grid;gap:6px}.request-lines label{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
 .request-lines label:last-child{border-bottom:none}.request-lines small{color:var(--muted)}
+.request-lines label.voided{opacity:.72}.request-lines label.voided>span:first-child{text-decoration:line-through}.request-lines .void-detail{display:block;color:var(--red);text-decoration:none}.entry-row{cursor:pointer}.entry-row:hover{background:var(--brand-soft)}
 .approve-qty{width:110px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-align:right}
 .invoice-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
 .dashboard-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:18px 0 12px}.dashboard-head h2{margin:0}.dashboard-head p{margin:3px 0 0;color:var(--muted);font-size:.85rem}

@@ -27,7 +27,7 @@ Deno.serve(async request => {
       admin.from("dispatch_requests").select("id,delivery_note_no,status,customer,requester_id,rejection_reason").eq("id", job.request_id).single(),
       admin.from("staff_line_links").select("line_user_id,active").eq("user_id", job.recipient_user_id).eq("active", true).single(),
       admin.from("staff").select("name,preferred_language,is_active,role").eq("user_id", job.recipient_user_id).single(),
-      admin.from("dispatch_request_lines").select("item_id,code,model,requested_qty,approved_qty,purpose").eq("request_id", job.request_id).order("id"),
+      admin.from("dispatch_request_lines").select("item_id,code,model,requested_qty,approved_qty,purpose").eq("request_id", job.request_id).is("voided_at", null).order("id"),
     ]);
     if (requestError || linkError || staffError || linesError || !staff?.is_active || !link?.active) throw new Error("Notification recipient unavailable");
     const itemIds = [...new Set((lines || []).map(line => line.item_id).filter(Boolean))];

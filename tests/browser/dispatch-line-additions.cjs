@@ -62,6 +62,16 @@ async function open(browser, userId, role, additions, viewport) {
    assert.equal(await card.locator('[data-request-action="invoice"]').count(), 0, 'INV must be hidden while pending');
    assert.match(await card.innerText(), /รออนุมัติเพิ่มสินค้า/);
    await card.screenshot({path: path.join(output, 'reviewer-card-mobile.png')});
+   await page.click('#menuBtn');
+   const menuLayout = await page.locator('#menuPop').evaluate((menu) => {
+     const box = menu.getBoundingClientRect();
+     return { bottom: box.bottom, viewport: innerHeight, scrollable: menu.scrollHeight > menu.clientHeight };
+   });
+   assert.ok(menuLayout.bottom <= menuLayout.viewport + 1, 'account menu must stay inside the viewport');
+   await page.locator('#logoutBtn').scrollIntoViewIfNeeded();
+   assert.equal(await page.locator('#logoutBtn').isVisible(), true, 'logout must remain reachable');
+   await page.locator('#menuPop').screenshot({path: path.join(output, 'account-menu-mobile.png')});
+   await page.click('#menuBtn');
    await card.locator('[data-add-approve="add-1"]').click();
    await page.waitForFunction(() => testRpc.some(c => c.name === 'approve_dispatch_line_addition'));
    assert.deepEqual(await page.evaluate(() => testRpc.find(c => c.name === 'approve_dispatch_line_addition').args), {p_addition_id:'add-1'});

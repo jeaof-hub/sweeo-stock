@@ -16,10 +16,10 @@
 }
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Thai",Tahoma,"Leelawadee UI",sans-serif;font-size:16px;line-height:1.55}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans Thai",Tahoma,"Leelawadee UI",sans-serif;font-size:16px;line-height:1.55;overflow-x:clip}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--brand);outline-offset:2px}
-.wrap{width:100%;max-width:1080px;margin:0 auto;padding:0 16px 110px;overflow-x:hidden}
+.wrap{width:100%;max-width:1080px;margin:0 auto;padding:0 16px 110px;overflow:visible}
 [hidden]{display:none!important}
 .offline-banner{position:sticky;top:0;z-index:20;padding:8px 16px;background:var(--amber-soft);color:var(--amber);text-align:center;font-size:.85rem;font-weight:600;border-bottom:1px solid var(--amber)}
 .update-banner{position:sticky;top:0;z-index:21;display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 16px;background:#fff3e8;color:#8f3f0d;text-align:center;font-size:.85rem;font-weight:600;border-bottom:1px solid #ff8126}.update-banner[hidden]{display:none}.update-banner button{border:0;border-radius:999px;padding:5px 12px;background:#ff681d;color:#fff;font:inherit;cursor:pointer}.update-banner button:disabled{opacity:.65}
@@ -198,7 +198,7 @@ body.scanner-open{overflow:hidden}
 .banner{margin:12px 0 0;padding:10px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:.88rem;color:var(--muted)}
 .banner.auth-error{border-color:var(--red);color:var(--red)}
 .menu{position:relative}
-.menu .pop{position:absolute;right:0;top:44px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;z-index:8;overflow:hidden}
+.menu .pop{position:absolute;right:0;top:44px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.18);min-width:200px;z-index:8;max-height:calc(100dvh - 140px - env(safe-area-inset-bottom,0px));overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .menu .pop button{display:block;width:100%;text-align:left;padding:10px 14px;border:none;background:none;cursor:pointer;border-bottom:1px solid var(--line)}
 .menu .pop button:last-child{border-bottom:none}
 .menu .pop button:hover{background:var(--bg)}

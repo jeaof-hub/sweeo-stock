@@ -331,7 +331,14 @@
       $("lgMsg").textContent = /invalid|ไม่ถูกต้อง/i.test(error.message) ? "ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง" : "เข้าสู่ระบบไม่สำเร็จ: " + error.message;
     } finally { $("lgSubmit").disabled = false; }
   });
-  $("menuBtn").onclick = () => { const p = $("menuPop"); p.hidden = !p.hidden; $("menuBtn").setAttribute("aria-expanded", String(!p.hidden)); };
+  function fitMenuPop() {
+    const p = $("menuPop"), button = $("menuBtn");
+    if (p.hidden) return;
+    const available = window.innerHeight - button.getBoundingClientRect().bottom - 8;
+    p.style.maxHeight = `${Math.max(160, available)}px`;
+  }
+  $("menuBtn").onclick = () => { const p = $("menuPop"); p.hidden = !p.hidden; $("menuBtn").setAttribute("aria-expanded", String(!p.hidden)); fitMenuPop(); };
+  window.addEventListener("resize", fitMenuPop);
   document.addEventListener("click", e => { if (!e.target.closest("#userMenu")) { $("menuPop").hidden = true; $("menuBtn").setAttribute("aria-expanded", "false"); } });
   $("logoutBtn").onclick = async () => { $("menuPop").hidden = true; manualController?.clear(); await sb.auth.signOut(); toast("ออกจากระบบแล้ว"); };
   $("auditMenuBtn").onclick = () => { $("menuPop").hidden = true; if (canManageStock()) setTab("audit"); };

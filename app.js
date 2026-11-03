@@ -870,7 +870,9 @@
     $("addLineSave").disabled=true;
     try{
       const{error}=await sb.rpc("request_dispatch_line_addition",{p_request_id:requestId,p_item_id:itemId,p_qty:qty,p_purpose:line.querySelector(".purpose").value,p_return_required:line.querySelector(".return-required").checked,p_line_note:line.querySelector(".line-note").value.trim()});
-      if(error)throw error; $("dAddLine").close(); toast("ส่งรายการเพิ่มสินค้าไปรออนุมัติแล้ว ยังไม่ตัดสต็อก"); await reload();
+      if(error)throw error; $("dAddLine").close();
+      toast(["founder","owner"].includes(currentRole) ? "เพิ่มสินค้าและตัดสต็อกแล้ว" : "ส่งรายการเพิ่มสินค้าไปรออนุมัติแล้ว ยังไม่ตัดสต็อก");
+      await reload();
     }catch(error){msg.textContent=dbErr(error);}finally{$("addLineSave").disabled=false;}
   };
   async function additionAction(button){

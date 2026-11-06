@@ -35,6 +35,8 @@
   let dispatchRequests = [], dispatchLines = [], dispatchAdditions = [], pendingByItem = new Map();
   let invoices = [];
   let dashboard = null;
+  let priceRows = null, priceCategory = "", priceLoading = false;
+  const priceView = window.SWEEO_PRICE_LIST;
   let moreStockChanges = false;
   let calc = new Map();            // id -> {inQ,out,bal,status}
   let staffNames = {};
@@ -275,6 +277,7 @@
     $("tabMine").hidden = !["warehouse", "admin"].includes(currentRole);
     $("tabDeliveryNotes").hidden = !dispatchView.canSeeDeliveryNotes(currentRole);
     $("tabInvoices").hidden = !canManageInvoices();
+    $("tabPrices").hidden = !priceView.canSeePrices(currentRole);
     $("outBtn").textContent = currentRole === "warehouse" ? "ขอเบิก" : "เบิกสินค้า";
     $("alerts").hidden = !isMember; $("exportBtn").hidden = !canManageStock();
     $("manageUsersBtn").hidden = !canManageUsers();
@@ -293,8 +296,8 @@
       $("pw1").value = ""; $("pw2").value = ""; $("pwMsg").textContent = "";
       openDlg($("dPw"));
     }
-    if (!isMember || !canManageStock() && !$("viewAudit").hidden || !canManageUsers() && !$("viewChanges").hidden || !canManageInvoices() && !$("viewInvoices").hidden || !dispatchView.canSeeDeliveryNotes(currentRole) && !$("viewDeliveryNotes").hidden) setTab("stock");
-    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; dispatchRequests = []; dispatchLines = []; dispatchAdditions = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
+    if (!isMember || !canManageStock() && !$("viewAudit").hidden || !canManageUsers() && !$("viewChanges").hidden || !canManageInvoices() && !$("viewInvoices").hidden || !dispatchView.canSeeDeliveryNotes(currentRole) && !$("viewDeliveryNotes").hidden || !priceView.canSeePrices(currentRole) && !$("viewPrices").hidden) setTab("stock");
+    items = new Map(); entries = []; deletedEntries = []; stockChanges = []; invoices = []; dashboard = null; priceRows = null; priceCategory = ""; $("priceList").innerHTML = ""; $("priceChips").innerHTML = ""; $("priceCount").textContent = ""; $("priceQuery").value = ""; dispatchRequests = []; dispatchLines = []; dispatchAdditions = []; pendingByItem = new Map(); moreStockChanges = false; statusFilter = "";
     $("list").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
     await reload();
     if (isMember) {
@@ -700,6 +703,7 @@
     $("tabPending").setAttribute("aria-selected", String(which === "pending")); $("tabMine").setAttribute("aria-selected", String(which === "mine"));
     $("tabDeliveryNotes").setAttribute("aria-selected", String(which === "deliveryNotes"));
     $("tabInvoices").setAttribute("aria-selected", String(which === "invoices"));
+    $("tabPrices").setAttribute("aria-selected", String(which === "prices")); $("viewPrices").hidden = which !== "prices";
     $("viewDashboard").hidden = which !== "dashboard"; $("viewStock").hidden = which !== "stock"; $("viewLog").hidden = which !== "log"; $("viewAudit").hidden = which !== "audit"; $("viewChanges").hidden = which !== "changes"; $("viewPending").hidden = which !== "pending"; $("viewMine").hidden = which !== "mine"; $("viewDeliveryNotes").hidden = which !== "deliveryNotes"; $("viewInvoices").hidden = which !== "invoices";
     if (which === "dashboard") renderDashboard();
     if (which === "log") renderLog();
@@ -708,6 +712,7 @@
     if (which === "pending" || which === "mine") renderDispatchRequests(which);
     if (which === "deliveryNotes") renderDeliveryNotes();
     if (which === "invoices") renderInvoices();
+    if (which === "prices") openPrices();
   }
   $("tabDashboard").onclick = () => setTab("dashboard");
   $("tabStock").onclick = () => setTab("stock"); $("tabLog").onclick = () => setTab("log"); $("tabAudit").onclick = () => { if (canManageStock()) setTab("audit"); };
@@ -715,6 +720,44 @@
   $("tabPending").onclick = () => setTab("pending"); $("tabMine").onclick = () => setTab("mine");
   $("tabDeliveryNotes").onclick = () => { if (dispatchView.canSeeDeliveryNotes(currentRole)) setTab("deliveryNotes"); };
   $("tabInvoices").onclick = () => { if (canManageInvoices()) setTab("invoices"); };
+  $("tabPrices").onclick = () => { if (priceView.canSeePrices(currentRole)) setTab("prices"); };
+
+  /* ---------- price list (founder/owner only; enforced by RLS) ---------- */
+  async function openPrices() {
+    if (priceRows) return renderPrices();
+    if (priceLoading) return;
+    priceLoading = true;
+    $("priceList").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div>`;
+    const role = currentRole;
+    const { data, error } = await sb.from("price_list").select("*").order("sort_order");
+    priceLoading = false;
+    if (role !== currentRole || !priceView.canSeePrices(currentRole)) return;
+    if (error) { $("priceList").innerHTML = `<div class="state"><p>${esc(t("โหลดราคาไม่สำเร็จ ลองใหม่"))}</p></div>`; return; }
+    priceRows = data || [];
+    renderPrices();
+  }
+  function renderPrices() {
+    if (!priceRows) return;
+    const cats = priceView.categories(priceRows);
+    $("priceChips").innerHTML = [["", t("ทั้งหมด")], ...cats.map(c => [c, c])]
+      .map(([value, label]) => `<button type="button" data-no-translate class="chip${value === priceCategory ? " active" : ""}" data-price-cat="${esc(value)}" aria-pressed="${value === priceCategory}">${esc(label)}</button>`).join("");
+    const rows = priceView.filterPrices(priceRows, { query: $("priceQuery").value, category: priceCategory });
+    $("priceCount").textContent = t(`แสดง ${rows.length} รายการ`);
+    if (!rows.length) { $("priceList").innerHTML = `<div class="state"><p>${esc(t("ไม่พบรายการ"))}</p></div>`; return; }
+    const m = priceView.money;
+    const head = `<div class="price-row price-row-head"><span>${esc(t("ชื่อสินค้า"))}</span><span>${esc(t("วัตต์"))}</span><span>${esc(t("บรรจุ/ลัง"))}</span><span>Triple P ${esc(t("ไม่รวม VAT"))}</span><span>Triple P ${esc(t("รวม VAT"))}</span><span>Project ${esc(t("ไม่รวม VAT"))}</span><span>Project ${esc(t("รวม VAT"))}</span></div>`;
+    $("priceList").innerHTML = `<div class="price-table">${head}${rows.map(r => `<div class="price-row">
+      <div class="price-name" data-no-translate><b>${esc(r.commercial_name)}</b>${r.project_name ? `<small>Project: ${esc(r.project_name)}</small>` : ""}${r.note ? `<small>${esc(r.note)}</small>` : ""}</div>
+      <span class="price-watt" data-no-translate>${esc(r.watt || "-")}</span>
+      <span class="price-pack" data-no-translate>${esc(priceView.packLabel(r))}</span>
+      <span class="price-cell tp"><small>Triple P ${esc(t("ไม่รวม VAT"))}</small>${m(r.triplep_ex_vat)}</span>
+      <span class="price-cell tp"><small>Triple P ${esc(t("รวม VAT"))}</small>${m(r.triplep_in_vat)}</span>
+      <span class="price-cell pj"><small>Project ${esc(t("ไม่รวม VAT"))}</small>${m(r.project_ex_vat)}</span>
+      <span class="price-cell pj"><small>Project ${esc(t("รวม VAT"))}</small>${m(r.project_in_vat)}</span>
+    </div>`).join("")}</div>`;
+  }
+  $("priceQuery").addEventListener("input", renderPrices);
+  $("priceChips").addEventListener("click", e => { const b = e.target.closest("[data-price-cat]"); if (!b) return; priceCategory = b.dataset.priceCat; renderPrices(); });
   $("dashboardRefresh").onclick = reload;
   $("dashboardReorderLink").onclick = () => { statusFilter = "red"; setTab("stock"); renderAlerts(); renderList(); };
   $("viewDashboard").addEventListener("click", e => {

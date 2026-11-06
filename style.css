@@ -380,3 +380,29 @@ body.delivery-note-open{overflow:hidden}
 .line.add-line-form{grid-template-columns:1fr 110px}.request-lines label.add-line-pending{border-color:#d99a00;background:#fff8e6}.request-lines label.add-line-closed{opacity:.72}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .request-lines label.add-line-pending{background:rgba(217,154,0,.12)}}
 :root[data-theme="dark"] .request-lines label.add-line-pending{background:rgba(217,154,0,.12)}
+
+/* Price list (founder/owner only) */
+.price-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:16px 2px 10px;flex-wrap:wrap}
+.price-head h2{font-size:1.15rem;margin:0}.price-source{margin:4px 0 0;color:var(--muted);font-size:.82rem}
+.price-secret{font-size:.78rem;font-weight:600;color:var(--red);background:var(--red-soft);border-radius:999px;padding:4px 10px}
+.price-chips{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:thin}
+.price-chips .chip{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:.85rem;cursor:pointer}
+.price-chips .chip.active{background:var(--brand);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
+.price-table{display:flex;flex-direction:column;gap:8px}
+.price-row{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.price-row-head{display:none}
+.price-name{grid-column:1/-1;display:flex;flex-direction:column;gap:2px}.price-name small{color:var(--muted);font-size:.78rem}
+.price-watt,.price-pack{color:var(--muted);font-size:.84rem}.price-pack{text-align:right}
+.price-cell{display:flex;flex-direction:column;font-variant-numeric:tabular-nums;font-weight:600;font-size:1rem;padding:6px 8px;border-radius:8px}
+.price-cell small{font-weight:400;font-size:.72rem;color:var(--muted)}
+.price-cell.tp{background:var(--brand-soft)}.price-cell.pj{background:var(--green-soft)}
+@media (min-width:900px){
+  .price-table{gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+  .price-row{grid-template-columns:minmax(0,3fr) 70px 110px repeat(4,minmax(0,1fr));align-items:center;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:9px 14px}
+  .price-row:last-child{border-bottom:0}
+  .price-row-head{display:grid;background:var(--bg);color:var(--muted);font-size:.78rem;font-weight:600;position:sticky;top:0}
+  .price-row-head span:nth-child(n+4){text-align:right}
+  .price-name{grid-column:auto}.price-pack{text-align:left}
+  .price-cell{background:none!important;padding:0;text-align:right;font-size:.92rem}.price-cell small{display:none}
+  .price-cell.tp{color:var(--brand-text)}.price-cell.pj{color:var(--green)}
+}

@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=menu-1">
+<link rel="stylesheet" href="style.css?v=price-list-1">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
@@ -60,6 +60,7 @@
       <button class="tab" role="tab" id="tabMine" aria-selected="false" type="button" hidden>คำขอของฉัน</button>
       <button class="tab" role="tab" id="tabDeliveryNotes" aria-selected="false" type="button" hidden>ใบส่งของ</button>
       <button class="tab" role="tab" id="tabInvoices" aria-selected="false" type="button" hidden>INV <span id="invoiceBadge"></span></button>
+      <button class="tab" role="tab" id="tabPrices" aria-selected="false" type="button" hidden>ราคา</button>
       <button class="tab" role="tab" id="tabAudit" aria-selected="false" type="button" hidden>รายการที่ถูกลบ</button>
       <button class="tab" role="tab" id="tabChanges" aria-selected="false" type="button" hidden>บันทึกการเปลี่ยนแปลง</button>
     </div>
@@ -132,6 +133,15 @@
     <h2 class="view-title">รอเปิด INV</h2><div id="invoiceWaiting"></div>
     <h2 class="view-title">รายการ INV</h2><div id="invoiceList"></div>
     <h2 class="view-title">รายการที่ไม่ต้องเปิด INV</h2><div id="noInvoiceList"></div>
+  </section>
+
+  <section id="viewPrices" hidden>
+    <div class="price-head"><div><h2>รายการราคา</h2><p class="price-source">Triple P: Pricelist 20.08.2025 (ราคาปรับแล้ว) · Project: Price list 01.01.2023</p></div><span class="price-secret">ข้อมูลลับ · เห็นเฉพาะผู้ก่อตั้งและเจ้าของ</span></div>
+    <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="priceQuery" type="search" placeholder="ค้นหาชื่อสินค้าหรือวัตต์" autocomplete="off" aria-label="ค้นหาราคา"></div>
+    <div class="price-chips" id="priceChips" role="group" aria-label="หมวดสินค้า"></div>
+    <div class="count"><span id="priceCount"></span></div>
+    <div id="priceList" aria-live="polite"></div>
   </section>
 
   <section id="viewChanges" hidden>
@@ -377,8 +387,8 @@
 <datalist id="typeList"></datalist><datalist id="itemDeptList"></datalist>
 <datalist id="invoiceCustomerList"></datalist>
 
-<script src="i18n-zh-TW.js?v=stock-in-fix-1"></script>
-<script src="i18n.js?v=stock-in-fix-1"></script>
+<script src="i18n-zh-TW.js?v=price-list-1"></script>
+<script src="i18n.js?v=price-list-1"></script>
 <script src="pwa.js?v=1"></script>
 <script src="delivery-note.js?v=void-line-1"></script>
 <script src="delivery-pdf.js?v=1"></script>
@@ -386,6 +396,7 @@
 <script src="realtime-lifecycle.js?v=1"></script>
 <script src="manual.js?v=1"></script>
 <script src="dispatch-view.js?v=void-line-1"></script>
-<script src="app.js?v=stock-in-fix-1"></script>
+<script src="price-list.js?v=1"></script>
+<script src="app.js?v=price-list-1"></script>
 </body>
 </html>

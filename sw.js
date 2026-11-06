@@ -1,10 +1,10 @@
 /* SWEEO offline shell. Production data and authentication requests bypass caches. */
-const CACHE_NAME = "sweeo-shell-v11";
+const CACHE_NAME = "sweeo-shell-v12";
 const LEGACY_PWA_KEY = "./pwa.js";
 const SHELL = [
-  "./", "./index.html", "./style.css?v=menu-1", "./theme.js?v=zh-TW-1", "./pwa.js?v=1", "./app.js?v=stock-in-fix-1",
-  "./realtime-lifecycle.js?v=1", "./i18n.js?v=stock-in-fix-1", "./i18n-zh-TW.js?v=stock-in-fix-1",
-  "./delivery-note.js?v=void-line-1", "./delivery-pdf.js?v=1", "./scanner.js?v=phase-5-3", "./manual.js?v=1", "./dispatch-view.js?v=void-line-1", "./config.js",
+  "./", "./index.html", "./style.css?v=price-list-1", "./theme.js?v=zh-TW-1", "./pwa.js?v=1", "./app.js?v=price-list-1",
+  "./realtime-lifecycle.js?v=1", "./i18n.js?v=price-list-1", "./i18n-zh-TW.js?v=price-list-1",
+  "./delivery-note.js?v=void-line-1", "./delivery-pdf.js?v=1", "./scanner.js?v=phase-5-3", "./manual.js?v=1", "./dispatch-view.js?v=void-line-1", "./price-list.js?v=1", "./config.js",
   "./site.webmanifest", "./assets/sweeo-logo.png", "./assets/app-icon-192.png",
   "./assets/app-icon-512.png", "./assets/apple-touch-icon.png"
 ];

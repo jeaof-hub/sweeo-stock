@@ -9,6 +9,7 @@
   if (lang === "zh-TW") document.title = "SWEEO 庫存管理";
 
   const english = {
+    "ราคา": "Prices", "ทั้งหมด": "All", "รายการราคา": "Price list", "ข้อมูลลับ · เห็นเฉพาะผู้ก่อตั้งและเจ้าของ": "Confidential · Founder and Owner only", "Triple P: Pricelist 20.08.2025 (ราคาปรับแล้ว) · Project: Price list 01.01.2023": "Triple P: Pricelist 20.08.2025 (adjusted price) · Project: Price list 01.01.2023", "ค้นหาชื่อสินค้าหรือวัตต์": "Search product name or watt", "ค้นหาราคา": "Search prices", "หมวดสินค้า": "Product category", "ไม่พบรายการ": "No items found", "ชื่อสินค้า": "Product name", "วัตต์": "Watt", "บรรจุ/ลัง": "Pack/carton", "ไม่รวม VAT": "Ex. VAT", "รวม VAT": "Incl. VAT", "โหลดราคาไม่สำเร็จ ลองใหม่": "Could not load prices. Retry",
     "สต็อกสินค้า SWEEO": "SWEEO Stock",
     "กำลังโหลดข้อมูล": "Loading stock",
     "โหมดมืด": "Dark mode", "โหมดสว่าง": "Light mode", "เว็บไซต์บริษัท SWEEO": "SWEEO company website",
@@ -88,6 +89,7 @@
   });
 
   const dynamic = [
+    [/^แสดง ([\d,]+) รายการ$/, "Showing $1 items"],
     [/^ข้อมูล ณ (.+) · สัปดาห์เริ่ม (.+)$/, "Data as of $1 · Week starting $2"],
     [/^และอีก ([\d,]+) รายการ$/, "$1 more products"],
     [/^([\d,]+) รายการ\s+อัปเดต (.+?) น\.$/, "$1 products · Updated $2"],

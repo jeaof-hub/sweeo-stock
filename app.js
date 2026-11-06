@@ -1368,11 +1368,13 @@
   $("eSave").onclick = () => {
     entryDraft = collectEntryDraft(); if (!entryDraft) return;
     const waits = entryDraft.kind === "out" && ["warehouse","admin"].includes(currentRole);
-    $("erMode").textContent = waits ? "รายการนี้จะส่งไปรออนุมัติ และยังไม่ตัดยอด" : "รายการนี้จะตัดยอดสต็อกทันที";
+    $("erMode").textContent = waits ? "รายการนี้จะส่งไปรออนุมัติ และยังไม่ตัดยอด" : entryDraft.kind === "in" ? "รายการนี้จะเพิ่มยอดสต็อกทันที" : "รายการนี้จะตัดยอดสต็อกทันที";
     $("erBody").innerHTML = `<div class="review-mode">${esc($("erMode").textContent)}</div><div class="review-lines">${entryDraft.rows.map(r => `<div class="review-line"><span>${esc(itemName(items.get(r.item_id)))}${r.kind === "out" ? `<small>${esc(purposeLabel[r.purpose])} · ${r.return_required ? "คืน" : "ไม่คืน"}${r.line_note ? ` · ${esc(r.line_note)}` : ""}</small>` : ""}</span><b>${fmt(r.qty)} ชิ้น</b></div>`).join("")}</div><dl class="meta"><dt>วันที่</dt><dd>${esc(thDate(entryDraft.date))}</dd>${entryDraft.rows[0].doc_no ? `<dt>${entryDraft.kind === "out" ? "เลขอ้างอิงเดิม" : "เอกสาร"}</dt><dd>${esc(entryDraft.rows[0].doc_no)}</dd>` : ""}<dt>ลูกค้า</dt><dd>${esc($("eCust").value.trim() || "–")}</dd></dl>`;
     $("erMsg").textContent = ""; $("dEntry").close(); openDlg($("dEntryReview"));
   };
   $("erBack").onclick = () => { $("dEntryReview").close(); openDlg($("dEntry")); };
+  // purpose / return_required / line_note belong to dispatch requests only; the movements table has no such columns.
+  const movementRow = ({ purpose, return_required, line_note, ...row }) => row;
   $("erConfirm").onclick = async () => {
     if (!entryDraft) return;
     $("erConfirm").disabled = true;
@@ -1382,7 +1384,7 @@
       const requestId = entryDraft.requestId;
       const result = requestId ? await sb.rpc("update_dispatch_request", { p_request_id: requestId, ...args }) : await sb.rpc("create_dispatch_request", args);
       error = result.error; savedRequestId = requestId || result.data || "";
-    } else ({ error } = await sb.from("movements").insert(entryDraft.rows));
+    } else ({ error } = await sb.from("movements").insert(entryDraft.rows.map(movementRow)));
     $("erConfirm").disabled = false;
     if (error) { $("erMsg").textContent = dbErr(error); return; }
     const saved = entryDraft; entryDraft = null; $("dEntryReview").close(); toast(saved.kind === "out" && ["warehouse","admin"].includes(currentRole) ? "ส่งคำขอเบิกแล้ว" : `${saved.kind === "out" ? "บันทึกส่งออก" : "บันทึกรับเข้า"}แล้ว ${saved.rows.length} รายการ`); await reload();
